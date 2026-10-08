@@ -36,9 +36,11 @@ describe('meal completeness and adherence', () => {
     expect(log.meals).toHaveLength(3);
     expect(isMealComplete({ ...log.meals[0], templateId: 'deleted' }, menu)).toBe(false);
   });
-  it('only gives credit when done AND complete; clamps to zero', () => {
-    const menu = settings(); const log = day(); log.meals[0].done = true;
-    expect(adherence(log.date, { [log.date]: log }, menu).score).toBe(0);
+  it('gives credit for any done meal, even without selections', () => {
+    const menu = settings(); const log = day();
+    expect(adherence(log.date, { [log.date]: log }, menu)).toMatchObject({ score: 0, complete: 0 });
+    log.meals[0].done = true;
+    expect(adherence(log.date, { [log.date]: log }, menu)).toMatchObject({ score: 33, complete: 1 });
     completeDay(log, menu); expect(adherence(log.date, { [log.date]: log }, menu).score).toBe(100);
     log.meals[0].done = false; expect(adherence(log.date, { [log.date]: log }, menu).score).toBe(67);
   });

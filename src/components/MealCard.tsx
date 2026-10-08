@@ -48,6 +48,6 @@ export function MealCard({ meal, day, settings, logs }: { meal: MealEntry; day: 
     </div>}
     {(template?.countsAsCheat || template?.extraChargeKcal !== undefined || meal.freeText) && <Field label="מה אכלת? הערה לארוחה"><input value={meal.freeText ?? ''} placeholder="אפשר להוסיף פרטים…" onChange={e => update(m => { m.freeText = e.target.value; })} /></Field>}
     <button className={`done-button ${meal.done ? 'is-done' : ''}`} aria-pressed={meal.done} onClick={() => update(m => { m.done = !m.done; })}><Check size={20} />{meal.done ? 'אכלתי, סומן!' : 'אכלתי'}</button>
-    {meal.done && !complete && <p className="soft-hint">סומן כאכלתי. נשאר להשלים את בחירות החובה.</p>}
+    {meal.done && !complete && <p className="soft-hint">נספר כאכלתי. אפשר לסמן מה אכלת כדי שזה ייכנס למכסות ולגרפים.</p>}
   </article>;
 }

@@ -1,13 +1,14 @@
 import type { Logs, Settings } from '../types';
 import { remaining } from './bank';
-import { isMealComplete, viewDay } from './meals';
+import { viewDay } from './meals';
 import { startOfWeek } from './dates';
 import { weeklyLimits } from './weekly';
 
 export function adherence(date: string, logs: Logs, settings: Settings): { score: number; flags: string[]; complete: number } {
   const day = viewDay(logs[date], date, settings);
   const meals = day.meals.filter(m => settings.slots.some(s => s.id === m.slotId));
-  const complete = meals.filter(m => m.done && isMealComplete(m, settings)).length;
+  // "I ate it" counts on its own; picking every required food is optional detail.
+  const complete = meals.filter(m => m.done).length;
   const flags: string[] = [];
   if (day.meals.some(m => settings.templates.find(t => t.id === m.templateId)?.requiresWorkout) && !day.workout) flags.push('ערב בשרי ללא אימון');
   if (remaining(date, logs, settings.dailyBankKcal) < 0) flags.push('חריגה מבנק הקלוריות');

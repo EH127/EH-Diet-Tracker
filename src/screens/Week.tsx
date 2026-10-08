@@ -3,7 +3,7 @@ import { useStore } from '../store/hooks';
 import { addDays, dayName, displayDate, weekDays } from '../lib/dates';
 import { adherence } from '../lib/adherence';
 import { remaining, spent } from '../lib/bank';
-import { isMealComplete, viewDay } from '../lib/meals';
+import { viewDay } from '../lib/meals';
 import { WeeklyLimits } from '../components/WeeklyLimits';
 import { Progress, ScoreRing } from '../components/ui';
 
@@ -19,7 +19,7 @@ export default function Week({ date, onDate, openDay }: { date: string; onDate: 
       const day = viewDay(logs[d], d, settings);
       const score = adherence(d, logs, settings);
       const balance = remaining(d, logs, settings.dailyBankKcal);
-      return <button key={d} className="card week-day" onClick={() => openDay(d)} aria-label={`פתיחת ${dayName(d)} ${displayDate(d)}, ציון ${score.score}`}><ScoreRing small score={score.score} /><div className="grow"><strong>{dayName(d)} <small className="muted">{displayDate(d, true)}</small></strong><div className="meal-dots">{day.meals.map(m => <span key={m.slotId} className={`meal-dot ${m.done && isMealComplete(m, settings) ? 'complete' : m.done || Object.values(m.selections).some(s => s.length) ? 'partial' : ''}`} title={`${settings.slots.find(s => s.id === m.slotId)?.name ?? '(נמחק)'}: ${m.done ? 'אכלתי' : 'טרם הושלם'}`} />)}<span className="small-text">{day.workout && '💪 '}{day.meals.some(m => settings.templates.find(t => t.id === m.templateId)?.countsAsCheat) && '🍕'}</span></div><small className="muted">{day.water} כוסות מים</small></div><div className={`week-bank ${balance < 0 ? 'text-danger' : 'text-primary'}`}><strong>{balance}</strong><small>קל׳ בבנק</small></div></button>;
+      return <button key={d} className="card week-day" onClick={() => openDay(d)} aria-label={`פתיחת ${dayName(d)} ${displayDate(d)}, ציון ${score.score}`}><ScoreRing small score={score.score} /><div className="grow"><strong>{dayName(d)} <small className="muted">{displayDate(d, true)}</small></strong><div className="meal-dots">{day.meals.map(m => <span key={m.slotId} className={`meal-dot ${m.done ? 'complete' : Object.values(m.selections).some(s => s.length) ? 'partial' : ''}`} title={`${settings.slots.find(s => s.id === m.slotId)?.name ?? '(נמחק)'}: ${m.done ? 'אכלתי' : 'טרם הושלם'}`} />)}<span className="small-text">{day.workout && '💪 '}{day.meals.some(m => settings.templates.find(t => t.id === m.templateId)?.countsAsCheat) && '🍕'}</span></div><small className="muted">{day.water} כוסות מים</small></div><div className={`week-bank ${balance < 0 ? 'text-danger' : 'text-primary'}`}><strong>{balance}</strong><small>קל׳ בבנק</small></div></button>;
     })}</div>
     <p className="legend"><span className="meal-dot complete" />הושלם <span className="meal-dot partial" />חלקי <span className="meal-dot" />ריק</p>
     <WeeklyLimits date={date} logs={logs} settings={settings} />
