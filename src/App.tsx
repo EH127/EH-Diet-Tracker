@@ -1,122 +1,47 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import './App.css'
+import { lazy, Suspense, useEffect, useSyncExternalStore } from 'react';
+import { BarChart3, BookOpen, CalendarDays, House, Leaf, Settings as SettingsIcon } from 'lucide-react';
+import { dateKey, isDateKey } from './lib/dates';
+import { startSync, syncLabels, useSync } from './lib/sync';
+import { useStorageError, useStore } from './store/hooks';
+import Today from './screens/Today';
 
-function App() {
-  const [count, setCount] = useState(0)
+const Week = lazy(() => import('./screens/Week'));
+const Stats = lazy(() => import('./screens/Stats'));
+const Menu = lazy(() => import('./screens/Menu'));
+const Settings = lazy(() => import('./screens/Settings'));
+const tabs = [
+  { id: 'today', label: 'היום', icon: House }, { id: 'week', label: 'שבוע', icon: CalendarDays },
+  { id: 'stats', label: 'גרפים', icon: BarChart3 }, { id: 'menu', label: 'תפריט', icon: BookOpen }, { id: 'settings', label: 'הגדרות', icon: SettingsIcon },
+] as const;
+type Tab = typeof tabs[number]['id'];
+const listenHash = (listener: () => void) => { window.addEventListener('hashchange', listener); return () => window.removeEventListener('hashchange', listener); };
+const listenClock = (listener: () => void) => { const timer = setInterval(listener, 30_000); return () => clearInterval(timer); };
 
-  return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+export default function App() {
+  const { settings } = useStore();
+  const sync = useSync();
+  const error = useStorageError();
+  const today = useSyncExternalStore(listenClock, dateKey);
+  const hash = useSyncExternalStore(listenHash, () => window.location.hash);
+  const [path, query] = hash.replace(/^#\/?/, '').split('?');
+  const tab = tabs.some(t => t.id === path) ? path as Tab : 'today';
+  const selectedDate = new URLSearchParams(query).get('date');
+  const date = isDateKey(selectedDate) ? selectedDate : today;
+  function navigate(next: Tab, targetDate = date) {
+    window.location.hash = `/${next}${(next === 'today' || next === 'week') && targetDate !== today ? `?date=${targetDate}` : ''}`;
+  }
+  useEffect(() => startSync(), []);
+  useEffect(() => {
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    const apply = () => {
+      const dark = settings.theme === 'dark' || (settings.theme === 'system' && media.matches);
+      document.documentElement.classList.toggle('dark', dark);
+      document.querySelector('meta[name="theme-color"]')?.setAttribute('content', dark ? '#14231c' : '#f6f7f2');
+    };
+    apply(); media.addEventListener('change', apply); return () => media.removeEventListener('change', apply);
+  }, [settings.theme]);
+  useEffect(() => { window.scrollTo({ top: 0 }); }, [tab]);
+  return <><a className="skip-link" href="#main-content" onClick={e => { e.preventDefault(); document.getElementById('main-content')?.focus(); }}>דילוג לתוכן</a><div className="app-shell"><header className="app-bar"><a className="brand" href="#/today"><span className="brand-icon"><Leaf size={22} /></span><span>מעקב תפריט<small>להרגיש טוב, יום יום</small></span></a><button className="sync-indicator" onClick={() => navigate('settings')} aria-label={`מצב סנכרון: ${syncLabels[sync.status]}`}><span className={`status-dot ${sync.status}`} /><span>{syncLabels[sync.status]}</span></button></header>
+    <main id="main-content" tabIndex={-1}>{error && <p className="notice error" role="alert">{error}</p>}<Suspense fallback={<p className="empty" role="status">פותחים את היומן…</p>}>{tab === 'today' && <Today date={date} onDate={d => navigate('today', d)} />}{tab === 'week' && <Week date={date} onDate={d => navigate('week', d)} openDay={d => navigate('today', d)} />}{tab === 'stats' && <Stats openDay={d => navigate('today', d)} />}{tab === 'menu' && <Menu edit={() => navigate('settings')} />}{tab === 'settings' && <Settings />}</Suspense></main>
+  </div><nav className="bottom-nav" aria-label="ניווט ראשי">{tabs.map(({ id, label, icon: Icon }) => <a key={id} href={`#/${id}`} className={tab === id ? 'active' : ''} aria-current={tab === id ? 'page' : undefined}><span><Icon size={22} strokeWidth={tab === id ? 2.4 : 1.8} /></span>{label}</a>)}</nav></>;
 }
-
-export default App
