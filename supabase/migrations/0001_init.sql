@@ -35,3 +35,6 @@ create policy "day_logs_delete" on public.day_logs for delete to authenticated
   using ((select auth.uid()) = user_id);
 
 grant select, insert, update, delete on table public.user_settings, public.day_logs to authenticated;
+
+-- The app is only usable signed in; keep anonymous clients out entirely.
+revoke all on table public.user_settings, public.day_logs from anon;
