@@ -5,7 +5,7 @@ import { buildReport, evaluateReportTask, formatReportMessage, reportRange, repo
 
 const start = '2026-10-04';
 const wholeWeek = (): Logs => Object.fromEntries(reportRange(start).days.map(date => [date, day(date, {
-  water: 8, workout: true, habits: { steps10k: true, aerobic: true, noScreen: true },
+  water: 8, steps: 10000, workout: true, habits: { aerobic: true, noScreen: true },
 })]));
 const task = (rule: ReportTask['rule']): ReportTask => ({ id: 'task', label: 'משימה', rule });
 
@@ -66,6 +66,30 @@ describe('report rating', () => {
   });
 });
 describe('report task rules', () => {
+  it('divides steps by seven even when days or totals are missing, ignoring old habit checks and other weeks', () => {
+    const logs: Logs = { [start]: day(start, { steps: 14000 }),
+      '2026-10-05': day('2026-10-05', { habits: { steps10k: true } }),
+      '2026-10-06': day('2026-10-06', { steps: 0 }),
+      '2026-10-03': day('2026-10-03', { steps: 70000 }), '2026-10-11': day('2026-10-11', { steps: 70000 }) };
+    const rule = task({ type: 'steps-average' });
+    expect(evaluateReportTask(rule, start, logs, settings(), 9)).toMatchObject({
+      stepsAverage: 2000, done: false, reason: 'ממוצע 2,000 · יעד 10,000',
+    });
+    expect(evaluateReportTask(rule, start, {}, settings(), 9)).toMatchObject({ stepsAverage: 0, done: false, reason: 'ממוצע 0 · יעד 10,000' });
+  });
+  it.each([[69993, 9999, false], [69996, 9999, false], [69997, 10000, true], [70000, 10000, true], [70004, 10001, true]])(
+    'rounds the weekly total %i once to %i and checks the goal boundary', (sum, average, done) => {
+      expect(evaluateReportTask(task({ type: 'steps-average' }), start, { [start]: day(start, { steps: sum }) }, settings(), 9))
+        .toMatchObject({ stepsAverage: average, done });
+    });
+  it('uses the configured steps goal instead of the default task label', () => {
+    const menu = settings(); menu.stepsGoal = 8000;
+    const logs = { [start]: day(start, { steps: 56000 }) };
+    expect(evaluateReportTask(menu.weeklyReport.tasks[1], start, logs, menu, 9))
+      .toMatchObject({ label: '10 אלף צעדים', stepsAverage: 8000, done: true, reason: 'ממוצע 8,000 · יעד 8,000' });
+    menu.stepsGoal = 8001;
+    expect(evaluateReportTask(menu.weeklyReport.tasks[1], start, logs, menu, 9).done).toBe(false);
+  });
   it('requires water on all seven days and accepts amounts above or equal to the goal', () => {
     const logs = wholeWeek(); const menu = settings(); const rule = task({ type: 'water-every-day' });
     logs[start].water = 10;
@@ -78,9 +102,9 @@ describe('report task rules', () => {
     menu.waterGoal = 2.5; expect(evaluateReportTask(rule, start, wholeWeek(), menu, 9).done).toBe(false);
   });
   it('requires the selected habit every day, treating absent and unchecked habits as incomplete', () => {
-    const rule = task({ type: 'habit-every-day', habitId: 'steps10k' }); const logs = wholeWeek();
+    const rule = task({ type: 'habit-every-day', habitId: 'noScreen' }); const logs = wholeWeek();
     expect(evaluateReportTask(rule, start, logs, settings(), 9).done).toBe(true);
-    logs[start].habits = undefined; logs['2026-10-05'].habits!.steps10k = false;
+    logs[start].habits = undefined; logs['2026-10-05'].habits!.noScreen = false;
     expect(evaluateReportTask(rule, start, logs, settings(), 9)).toMatchObject({ done: false, reason: '5/7 ימים' });
     expect(evaluateReportTask(task({ type: 'habit-every-day', habitId: 'deleted' }), start, logs, settings(), 9).done).toBe(false);
   });
@@ -119,12 +143,23 @@ describe('report task rules', () => {
 });
 describe('report message', () => {
   it('formats the exact WhatsApp message with user overrides and checkmarks only after done tasks', () => {
-    const tasks = settings().weeklyReport.tasks.map((t, i) => ({ ...t, done: [0, 1, 4, 5].includes(i) }));
+    const logs = wholeWeek(); Object.values(logs).forEach(d => { d.steps = 10450; });
+    const tasks = buildReport('2026-10-11', start, logs, settings()).tasks.map((t, i) => ({ ...t, done: [0, 1, 4, 5].includes(i) }));
     expect(formatReportMessage({ date: '2026-10-11', startWeight: 85, previousWeight: 83.2, weight: 82.5, rating: 9 }, tasks)).toBe([
       'תאריך: 11.10.2026', 'משקל התחלתי: 85.0', 'משקל שבוע שעבר: 83.2', 'משקל השבוע: 82.5',
-      'כמה עמדת בתפריט מ1-10: 9', 'משימות שעשית:', 'מים ✅', '10 אלף צעדים ✅', 'כל האימונים',
+      'כמה עמדת בתפריט מ1-10: 9', 'משימות שעשית:', 'מים ✅', '10 אלף צעדים - ממוצע 10,450 ✅', 'כל האימונים',
       'עמידה בתפריט 10/10', '3 אירובי ✅', 'לאכול בלי טלפון ולא מול מסך ✅',
     ].join('\n'));
+  });
+  it.each([[7320, false, '10 אלף צעדים - ממוצע 7,320'], [10450, true, '10 אלף צעדים - ממוצע 10,450 ✅'], [0, false, '10 אלף צעדים - ממוצע 0']])(
+    'formats the exact steps line for average %i', (average, done, line) => {
+      const result = buildReport('2026-10-11', start, { [start]: day(start, { steps: average * 7 }) }, settings());
+      expect(result.tasks[1].done).toBe(done);
+      expect(formatReportMessage(result.fields, result.tasks).split('\n')[7]).toBe(line);
+    });
+  it('keeps a manual checkbox override while retaining the computed average and customized label', () => {
+    const result = evaluateReportTask({ id: 'walk', label: 'הליכה', rule: { type: 'steps-average' } }, start, {}, settings(), 9);
+    expect(formatReportMessage({ date: '2026-10-11', rating: 9 }, [{ ...result, done: true }]).split('\n').at(-1)).toBe('הליכה - ממוצע 0 ✅');
   });
   it('leaves missing weights blank, rounds to one decimal, and preserves task label order', () => {
     expect(formatReportMessage({ date: '2026-01-02', rating: 1 }, [])).toBe('תאריך: 02.01.2026\nמשקל התחלתי: \nמשקל שבוע שעבר: \nמשקל השבוע: \nכמה עמדת בתפריט מ1-10: 1\nמשימות שעשית:');

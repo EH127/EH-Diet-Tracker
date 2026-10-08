@@ -2,9 +2,10 @@ import type { Logs, ReportTask, Settings, WeeklyReportSettings } from '../types'
 import { addDays, startOfWeek } from './dates';
 import { adherence } from './adherence';
 import { waterGoalMet } from './water';
+import { averageSteps, formatSteps } from './steps';
 
 export type ReportFields = { date: string; startWeight?: number; previousWeight?: number; weight?: number; rating: number };
-export type EvaluatedTask = { id: string; label: string; done: boolean; reason: string };
+export type EvaluatedTask = { id: string; label: string; done: boolean; reason: string; stepsAverage?: number };
 export function reportWeekRange(reportDate: string, weekStartsOn: 0 | 1 = 0): { start: string; end: string; days: string[] } {
   const current = startOfWeek(reportDate, weekStartsOn);
   const start = current === reportDate ? addDays(current, -7) : current;
@@ -40,7 +41,12 @@ export function evaluateReportTask(task: ReportTask, start: string, logs: Logs, 
   const days = reportRange(start).days;
   const rule = task.rule;
   let count: number, target: number, done: boolean, reason: string;
+  let stepsAverage: number | undefined;
   switch (rule.type) {
+    case 'steps-average':
+      stepsAverage = averageSteps(days, logs);
+      done = stepsAverage >= settings.stepsGoal;
+      reason = `ממוצע ${formatSteps(stepsAverage)} · יעד ${formatSteps(settings.stepsGoal)}`; break;
     case 'water-every-day':
       count = days.filter(d => !!logs[d] && waterGoalMet(logs[d].water, settings)).length;
       done = count === 7; reason = `${count}/7 ימים`; break;
@@ -58,14 +64,14 @@ export function evaluateReportTask(task: ReportTask, start: string, logs: Logs, 
     case 'rating-10': done = rating === 10; reason = `${rating}/10`; break;
     case 'manual': done = false; reason = 'סימון ידני'; break;
   }
-  return { id: task.id, label: reportTaskLabel(task, settings.weeklyReport), done, reason };
+  return { id: task.id, label: reportTaskLabel(task, settings.weeklyReport), done, reason, stepsAverage };
 }
 export function buildReport(reportDate: string, start: string, logs: Logs, settings: Settings) {
   const fields: ReportFields = { date: reportDate, startWeight: reportStartWeight(logs, settings.weeklyReport),
     previousWeight: reportWeight(addDays(start, -7), logs), weight: reportWeight(start, logs), rating: reportRating(start, logs, settings) };
   return { fields, tasks: settings.weeklyReport.tasks.map(t => evaluateReportTask(t, start, logs, settings, fields.rating)) };
 }
-export function formatReportMessage(fields: ReportFields, tasks: Pick<EvaluatedTask, 'label' | 'done'>[]): string {
+export function formatReportMessage(fields: ReportFields, tasks: Pick<EvaluatedTask, 'label' | 'done' | 'stepsAverage'>[]): string {
   const [year, month, day] = fields.date.split('-');
   const weight = (n: number | undefined) => n === undefined ? '' : n.toFixed(1);
   return [
@@ -75,6 +81,6 @@ export function formatReportMessage(fields: ReportFields, tasks: Pick<EvaluatedT
     `משקל השבוע: ${weight(fields.weight)}`,
     `כמה עמדת בתפריט מ1-10: ${fields.rating}`,
     'משימות שעשית:',
-    ...tasks.map(t => `${t.label}${t.done ? ' ✅' : ''}`),
+    ...tasks.map(t => `${t.label}${t.stepsAverage !== undefined ? ` - ממוצע ${formatSteps(t.stepsAverage)}` : ''}${t.done ? ' ✅' : ''}`),
   ].join('\n');
 }

@@ -4,6 +4,7 @@ import { remaining } from './bank';
 import { weeklyLimits } from './weekly';
 import { deviationGroups } from './deviations';
 import { waterProgressText } from './water';
+import { formatSteps } from './steps';
 
 // Short Hebrew evening summary for one date, used as the push notification text.
 export function eveningSummary(date: string, logs: Logs, settings: Settings): { title: string; body: string } {
@@ -17,6 +18,8 @@ export function eveningSummary(date: string, logs: Logs, settings: Settings): { 
   if (deviations.length) parts.push(`${deviations.length === 1 ? 'חריגה אחת' : `${deviations.length} חריגות`} · ${deviations.reduce((n, d) => n + d.kcal, 0)} קל׳`);
   const water = logs[date]?.water ?? 0;
   parts.push(`מים ${waterProgressText(water, settings)}`);
+  const steps = logs[date]?.steps;
+  if (steps !== undefined) parts.push(`צעדים ${formatSteps(steps)}/${formatSteps(settings.stepsGoal)}`);
   // Limits are counted through this date only, like the adherence score.
   const week = weeklyLimits(date, logs, settings).filter(l => l.status !== 'ok' && l.count > 0)
     .sort((a, b) => Number(b.status === 'over') - Number(a.status === 'over')).slice(0, 2);

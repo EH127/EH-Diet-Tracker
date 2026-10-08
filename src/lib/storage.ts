@@ -8,8 +8,8 @@ export const recoveryNotice = 'נשמר עותק שחזור של נתונים ש
 type LocalStorage = Pick<Storage, 'getItem' | 'setItem'>;
 export const emptyData = (): StoreData => ({ settings: freshSettings(), logs: {}, meta: { dirtyDays: [], settingsDirty: true, cursorVersion: 2 } });
 export function migrate(value: unknown): StoreData {
-  // Additive v1 fields are defaulted by parseBackup/withSettingsDefaults.
-  // Water remains a cup count, so legacy logs and dirty timestamps stay intact.
+  // parseBackup/withSettingsDefaults adds v1 defaults and migrates the old steps habit/task.
+  // Legacy logs and dirty timestamps stay intact; habit checks never become step counts.
   const backup = parseBackup(value);
   const source = value as { meta?: Partial<StoreData['meta']> };
   const meta = source.meta;

@@ -1,8 +1,9 @@
-import { ChevronLeft, ChevronRight, Droplets, Dumbbell, NotebookPen, Scale } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Droplets, Dumbbell, Footprints, NotebookPen, Scale } from 'lucide-react';
 import { useStore } from '../store/hooks';
 import { editDay } from '../store/store';
 import { addDays, dateKey, dayName, displayDate, startOfWeek } from '../lib/dates';
 import { waterGoalCups, waterProgressText } from '../lib/water';
+import { formatSteps } from '../lib/steps';
 import { mealUntouched, newMeal, viewDay } from '../lib/meals';
 import { adherence } from '../lib/adherence';
 import { InstallCard } from '../components/InstallCard';
@@ -10,7 +11,7 @@ import { BankCard } from '../components/BankCard';
 import { DeviationsCard } from '../components/DeviationsCard';
 import { MealCard } from '../components/MealCard';
 import { WeeklyLimits } from '../components/WeeklyLimits';
-import { Field, Progress, ScoreRing, Stepper } from '../components/ui';
+import { Field, NumberField, Progress, ScoreRing, Stepper } from '../components/ui';
 
 export default function Today({ date, onDate, onReport }: { date: string; onDate: (date: string) => void; onReport: () => void }) {
   const { settings, logs } = useStore();
@@ -28,6 +29,11 @@ export default function Today({ date, onDate, onReport }: { date: string; onDate
     {startOfWeek(date, settings.weekStartsOn) === date && <button className="secondary-button report-banner" onClick={onReport}>{dayName(date)} — זה הזמן לשלוח את הדוח השבועי</button>}
     <section className="day-overview"><div><span className="eyebrow">ההתקדמות שלך</span><h2>{score.complete} מתוך {settings.slots.length} ארוחות הושלמו</h2><p>כל בחירה טובה מצטרפת לדרך.</p></div><ScoreRing score={score.score} /></section>
     <section className={`workout-card ${day.workout ? 'active' : ''}`}><label><Dumbbell size={24} /><strong>היה אימון היום 💪</strong><input className="switch" type="checkbox" role="switch" checked={day.workout} onChange={e => editDay(date, d => { d.workout = e.target.checked; })} /></label>{canSuggest && <button className="suggestion" onClick={() => editDay(date, d => { const m = d.meals.find(m => m.slotId === evening.slotId); if (m) Object.assign(m, newMeal({ id: m.slotId, name: '', defaultTemplateId: meat.id })); })}>להחליף לערב בשרי? ←</button>}</section>
+    <section className="card stack"><div className="row between"><h2><Footprints size={20} /> צעדים היום</h2><bdi dir="ltr" className="muted small-text">{formatSteps(day.steps ?? 0)}/{formatSteps(settings.stepsGoal)}</bdi></div>
+      <NumberField label="סך הצעדים היום" optional value={day.steps} onChange={steps => editDay(date, d => { d.steps = steps; })} />
+      <div className="row" role="group" aria-label="עדכון מהיר של צעדים"><button className="secondary-button" aria-label="הוספת 1,000 צעדים" onClick={() => editDay(date, d => { d.steps = (d.steps ?? 0) + 1000; })}><bdi dir="ltr">+1,000</bdi></button><button aria-label="הפחתת 1,000 צעדים" disabled={!day.steps} onClick={() => editDay(date, d => { d.steps = Math.max(0, (d.steps ?? 0) - 1000); })}><bdi dir="ltr">−1,000</bdi></button></div>
+      <Progress value={day.steps ?? 0} max={settings.stepsGoal} label="יעד צעדים" /><p className="muted small-text">אפשר להעתיק את סך הצעדים מאפליקציית הבריאות בטלפון.</p>
+    </section>
     {settings.habits.length > 0 && <section className="card stack"><h2>משימות יומיות</h2>{settings.habits.map(habit => <label className="row between habit-row" key={habit.id}><span>{habit.emoji} {habit.name}</span><input className="switch" type="checkbox" role="switch" checked={day.habits?.[habit.id] ?? false} onChange={e => editDay(date, d => { d.habits = { ...d.habits, [habit.id]: e.target.checked }; })} /></label>)}</section>}
     <div className="section-label"><h2>הארוחות שלי</h2><span>אפשר להחליף בין הארוחות</span></div>
     {day.meals.length ? day.meals.map(meal => <MealCard key={meal.slotId} meal={meal} day={day} settings={settings} logs={logs} />) : <p className="empty">התפריט עוד פתוח לאפשרויות. אפשר להוסיף ארוחות במבנה היום בהגדרות.</p>}

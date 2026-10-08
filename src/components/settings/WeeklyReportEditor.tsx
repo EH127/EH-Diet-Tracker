@@ -2,11 +2,13 @@ import type { ReportRule, ReportTask, Settings } from '../../types';
 import { editSettings } from '../../store/store';
 import { moveItem } from '../../lib/reorder';
 import { reportTaskLabel } from '../../lib/report';
+import { formatSteps } from '../../lib/steps';
 import { Field, NumberField, TextField } from '../ui';
 import { EditorActions } from './EditorActions';
 
 const rules: { type: ReportRule['type']; label: string }[] = [
   { type: 'water-every-day', label: 'יעד מים בכל יום' },
+  { type: 'steps-average', label: 'ממוצע צעדים בשבוע' },
   { type: 'habit-every-day', label: 'משימה יומית בכל יום' },
   { type: 'habit-count', label: 'משימה במספר ימים' },
   { type: 'workout-count', label: 'מספר אימונים' },
@@ -29,8 +31,9 @@ export function WeeklyReportEditor({ settings }: { settings: Settings }) {
         <Field label="כלל לסימון אוטומטי"><select value={rule.type} onChange={e => {
           const type = e.target.value as ReportRule['type'];
           change({ rule: type === 'habit-count' || type === 'habit-every-day'
-            ? { type, habitId: settings.habits[0]?.id ?? 'steps10k' } : { type } });
+            ? { type, habitId: settings.habits[0]?.id ?? 'aerobic' } : { type } });
         }}>{rules.map(r => <option key={r.type} value={r.type}>{r.label}</option>)}</select></Field>
+        {rule.type === 'steps-average' && <p className="muted small-text">ממוצע שבעת הימים נבדק מול יעד הצעדים: {formatSteps(settings.stepsGoal)}. ימים ללא רישום נספרים כאפס.</p>}
         {(rule.type === 'habit-every-day' || rule.type === 'habit-count') && <Field label="משימה יומית"><select value={rule.habitId} onChange={e => change({ rule: { ...rule, habitId: e.target.value } })}>
           {!settings.habits.some(h => h.id === rule.habitId) && <option value={rule.habitId}>משימה שנמחקה</option>}
           {settings.habits.map(h => <option value={h.id} key={h.id}>{h.emoji} {h.name}</option>)}

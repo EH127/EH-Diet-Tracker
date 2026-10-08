@@ -23,5 +23,6 @@ export function mergeMenu(current: Settings, imported: Settings): Settings {
     weeklyReport: report ? { ...structuredClone(report), startWeight: current.weeklyReport?.startWeight } : report,
     // A legacy menu's goal is always cups, even when the current display is liters.
     waterUnit: menu.waterUnit ?? 'cups', cupMl: menu.cupMl ?? 250,
+    stepsGoal: menu.stepsGoal ?? current.stepsGoal,
     dailyBankKcal: menu.dailyBankKcal, weekStartsOn: menu.weekStartsOn, waterGoal: menu.waterGoal, updatedAt: nextTimestamp(current.updatedAt) });
 }

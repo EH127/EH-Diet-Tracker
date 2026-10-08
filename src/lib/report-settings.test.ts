@@ -7,10 +7,68 @@ import { buildMenuExport, mergeMenu, parseMenuFile } from './menu';
 
 const legacySettings = (): Settings => {
   const old: Partial<Settings> = { ...settings() };
-  delete old.habits; delete old.weeklyReport; delete old.waterUnit; delete old.cupMl;
+  delete old.habits; delete old.weeklyReport; delete old.waterUnit; delete old.cupMl; delete old.stepsGoal;
   return old as Settings;
 };
 describe('habit/report/water schema compatibility', () => {
+  it('migrates the old steps habit and every steps daily task without changing other habits, task labels, clocks or logs', () => {
+    const old = legacySettings();
+    old.habits = [{ id: 'custom', name: 'הליכה', emoji: '🚶' }, { id: 'steps10k', name: '10 אלף צעדים' }, { id: 'aerobic', name: 'אירובי' }];
+    old.weeklyReport = { ...settings().weeklyReport, startWeight: 85, tasks: [
+      { id: 'custom', label: 'הליכה יומית', rule: { type: 'habit-every-day', habitId: 'custom' } },
+      { id: 'steps', label: '10 אלף צעדים', rule: { type: 'habit-every-day', habitId: 'steps10k' } },
+      { id: 'another', label: 'צעדים בהתאמה אישית', rule: { type: 'habit-every-day', habitId: 'steps10k' } },
+      { id: 'manual', label: 'ידני', rule: { type: 'manual' } },
+    ] };
+    const log = day('2026-10-08', { habits: { steps10k: true, custom: true } });
+    const source = { settings: old, logs: { [log.date]: log }, meta: { cursorVersion: 2, dirtyDays: [log.date], settingsDirty: false } };
+    const original = structuredClone(source);
+    const raw = JSON.stringify(source);
+    const storage = { getItem: (key: string) => key === STORAGE_KEY ? raw : null, setItem: () => {} };
+    const expectedTasks = [old.weeklyReport.tasks[0],
+      { ...old.weeklyReport.tasks[1], rule: { type: 'steps-average' } },
+      { ...old.weeklyReport.tasks[2], rule: { type: 'steps-average' } }, old.weeklyReport.tasks[3]];
+    for (const upgraded of [migrate(source), parseBackup(source), loadData(storage).data]) {
+      expect(upgraded.settings).toMatchObject({ stepsGoal: 10000, updatedAt: old.updatedAt,
+        habits: [old.habits[0], old.habits[2]], weeklyReport: { startWeight: 85, tasks: expectedTasks } });
+      expect(upgraded.logs).toEqual(source.logs);
+      expect(upgraded.logs[log.date]).not.toHaveProperty('steps');
+    }
+    expect(migrate(source).meta).toMatchObject(source.meta);
+    // Cloud pulls call the same helper after validation; repeated normalization is idempotent.
+    expect(isSettings(old)).toBe(true);
+    const normalized = withSettingsDefaults(old);
+    expect(normalized.weeklyReport.tasks).toEqual(expectedTasks);
+    expect(withSettingsDefaults(normalized)).toBe(normalized);
+    expect(source).toEqual(original);
+  });
+  it('keeps custom steps goals and deliberately empty habit/task lists', () => {
+    const menu = { ...settings(), stepsGoal: 8450, habits: [], weeklyReport: { workoutTarget: 2, aerobicTarget: 4, tasks: [] } };
+    expect(withSettingsDefaults(menu)).toBe(menu);
+    expect(parseBackup({ settings: menu, logs: {} }).settings).toEqual(menu);
+    expect(settings().habits.map(h => h.id)).toEqual(['aerobic', 'noScreen']);
+    expect(settings().weeklyReport.tasks[1].rule).toEqual({ type: 'steps-average' });
+  });
+  it('roundtrips new step totals and rules while accepting absent totals in old backups', () => {
+    const menu = settings(); menu.stepsGoal = 7500;
+    const log = day('2026-10-08', { steps: 8450 });
+    const payload = { version: 1, settings: menu, logs: { [log.date]: log } };
+    expect(parseBackup(JSON.parse(JSON.stringify(payload)))).toEqual(payload);
+    expect(isDayLog(day())).toBe(true);
+    expect(isDayLog(day(undefined, { steps: 0 }))).toBe(true);
+  });
+  it('imports a steps goal and normalizes legacy steps tasks, keeping the current goal when the import lacks one', () => {
+    const current = settings(); current.stepsGoal = 8500;
+    const imported = settings(); imported.stepsGoal = 12000;
+    expect(mergeMenu(current, parseMenuFile(buildMenuExport(imported))).stepsGoal).toBe(12000);
+    const old = legacySettings(); old.habits = [{ id: 'steps10k', name: '10 אלף צעדים' }, { id: 'custom', name: 'מותאם' }];
+    old.weeklyReport = { ...settings().weeklyReport,
+      tasks: [{ id: 'old-steps', label: 'הליכה', rule: { type: 'habit-every-day', habitId: 'steps10k' } }] };
+    const result = mergeMenu(current, parseMenuFile({ kind: 'ehdt-menu', version: 1, settings: old }));
+    expect(result).toMatchObject({ stepsGoal: 8500, habits: [{ id: 'custom', name: 'מותאם' }],
+      weeklyReport: { tasks: [{ id: 'old-steps', label: 'הליכה', rule: { type: 'steps-average' } }] } });
+    expect(mergeMenu(legacySettings(), legacySettings()).stepsGoal).toBe(10000);
+  });
   it('adds defaults to old local storage and backups without rewriting logs, clocks or pending edits', () => {
     const log = day('2026-10-08', { water: 5 });
     const source = { settings: legacySettings(), logs: { [log.date]: log }, meta: { cursorVersion: 2, dirtyDays: [], settingsDirty: false } };
@@ -61,6 +119,7 @@ describe('habit/report/water schema compatibility', () => {
     expect(mergeMenu(old, old).weeklyReport).toEqual(settings().weeklyReport);
   });
   it.each([
+    ...[0, -1, 10000.5, NaN, Infinity, '10000', null].map(stepsGoal => ({ stepsGoal })),
     { waterUnit: 'ml' }, { waterUnit: null }, { cupMl: 0 }, { cupMl: -1 }, { cupMl: 250.5 }, { cupMl: '250' },
     { waterGoal: -1 }, { waterGoal: NaN }, { waterGoal: Infinity },
     { habits: null }, { habits: [{ id: 'x', name: 'א' }, { id: 'x', name: 'ב' }] }, { habits: [{ id: '__proto__', name: 'א' }] },
@@ -75,5 +134,11 @@ describe('habit/report/water schema compatibility', () => {
   });
   it.each([null, [], { a: 1 }, { a: 'true' }, JSON.parse('{"__proto__":true}')])('rejects malformed habit dictionaries (%#)', habits => {
     expect(isDayLog({ ...day(), habits })).toBe(false);
+  });
+  it.each([-1, 8450.5, NaN, Infinity, '8450', null])('rejects malformed step totals (%#)', steps => {
+    const log = { ...day(), steps };
+    const source = { settings: settings(), logs: { [log.date]: log } };
+    expect(isDayLog(log)).toBe(false);
+    expect(() => parseBackup(source)).toThrow(); expect(() => migrate(source)).toThrow();
   });
 });

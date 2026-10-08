@@ -31,7 +31,7 @@ function snackCatalog(v: unknown): boolean {
 function reportRule(v: unknown): boolean {
   if (!obj(v)) return false;
   switch (v.type) {
-    case 'water-every-day': case 'rating-10': case 'manual': return true;
+    case 'water-every-day': case 'steps-average': case 'rating-10': case 'manual': return true;
     case 'habit-every-day': return id(v.habitId);
     case 'habit-count': return id(v.habitId) && optional(v.n, n => integer(n) && n > 0);
     case 'workout-count': return optional(v.n, n => integer(n) && n > 0);
@@ -41,16 +41,21 @@ function reportRule(v: unknown): boolean {
 // Defaults cover local storage, backups and cloud pulls. Empty lists are deliberate.
 // Legacy water and waterGoal stay in cups; no day-log rewrite or timestamp change.
 export const withSettingsDefaults = (s: Settings): Settings => {
+  const legacyStepsHabit = s.habits?.some(h => h.id === 'steps10k');
+  const legacyStepsTasks = s.weeklyReport?.tasks?.some(t => t.rule.type === 'habit-every-day' && t.rule.habitId === 'steps10k');
   if (s.deviationCategories && s.snackCatalog && s.habits && s.waterUnit && s.cupMl
+    && s.stepsGoal !== undefined && !legacyStepsHabit && !legacyStepsTasks
     && s.weeklyReport?.workoutTarget !== undefined && s.weeklyReport?.aerobicTarget !== undefined && s.weeklyReport?.tasks) return s;
   return { ...s,
     deviationCategories: s.deviationCategories ?? structuredClone(defaultSettings.deviationCategories),
     snackCatalog: s.snackCatalog ?? structuredClone(defaultSettings.snackCatalog),
-    habits: s.habits ?? structuredClone(defaultSettings.habits),
+    habits: (s.habits ?? structuredClone(defaultSettings.habits)).filter(h => h.id !== 'steps10k'),
     waterUnit: s.waterUnit ?? 'cups', cupMl: s.cupMl ?? 250,
+    stepsGoal: s.stepsGoal ?? defaultSettings.stepsGoal,
     weeklyReport: { ...s.weeklyReport,
       workoutTarget: s.weeklyReport?.workoutTarget ?? 3, aerobicTarget: s.weeklyReport?.aerobicTarget ?? 3,
-      tasks: s.weeklyReport?.tasks ?? structuredClone(defaultSettings.weeklyReport.tasks) },
+      tasks: (s.weeklyReport?.tasks ?? structuredClone(defaultSettings.weeklyReport.tasks)).map(t =>
+        t.rule.type === 'habit-every-day' && t.rule.habitId === 'steps10k' ? { ...t, rule: { type: 'steps-average' } } : t) },
   };
 };
 export function isSettings(v: unknown): v is Settings {
@@ -58,6 +63,7 @@ export function isSettings(v: unknown): v is Settings {
   return v.version === 1 && (v.weekStartsOn === 0 || v.weekStartsOn === 1) && num(v.dailyBankKcal)
     && num(v.waterGoal) && v.waterGoal > 0 && optional(v.weightGoal, n => num(n) && n > 0)
     && optional(v.waterUnit, u => u === 'cups' || u === 'liters') && optional(v.cupMl, n => integer(n) && n > 0)
+    && optional(v.stepsGoal, n => integer(n) && n > 0)
     && optional(v.habits, h => items(h, x => str(x.name) && optional(x.emoji, str)))
     && optional(v.weeklyReport, r => obj(r) && optional(r.startWeight, n => num(n) && n > 0)
       && optional(r.workoutTarget, n => integer(n) && n > 0) && optional(r.aerobicTarget, n => integer(n) && n > 0)
@@ -78,6 +84,7 @@ export function isDayLog(v: unknown): v is DayLog {
   return obj(v) && isDateKey(v.date) && bool(v.workout) && integer(v.water) && stamp(v.updatedAt)
     && optional(v.weight, n => num(n) && n > 0) && optional(v.notes, str)
     && optional(v.habits, h => record(h, bool))
+    && optional(v.steps, integer)
     && Array.isArray(v.meals) && v.meals.every(m => obj(m) && id(m.slotId) && str(m.templateId) && bool(m.done)
       && record(m.selections, strings) && optional(m.extras, n => integer(n) && n <= 100) && optional(m.freeText, str))
     && new Set(v.meals.map(m => (m as Obj).slotId)).size === v.meals.length

@@ -98,6 +98,7 @@ type Settings = {
   waterGoal: number;                // chosen waterUnit per day, default 8 cups
   waterUnit: 'cups' | 'liters';      // default cups
   cupMl: number;                    // default 250 ml per cup
+  stepsGoal: number;                // positive integer, default 10000 steps per day
   habits: { id: string; name: string; emoji?: string }[];
   weeklyReport: WeeklyReportSettings; // optional starting weight, targets and ordered task rules
   weightGoal?: number;              // kg, optional
@@ -208,6 +209,7 @@ type DayLog = {
   meals: MealEntry[];        // one per slot (create lazily from settings.slots + defaultTemplateId)
   bank: BankEntry[];         // entries ORIGINATING on this day (chargeDate may point elsewhere)
   water: number;             // glasses
+  steps?: number;            // non-negative integer; absent means no step total recorded
   habits?: Record<string, boolean>; // habit id -> checked; missing means unchecked
   weight?: number;           // kg
   notes?: string;
@@ -237,6 +239,7 @@ Bottom nav tabs (lucide icons + Hebrew labels): **היום**, **שבוע**, **ג
 - **Meal cards**, one per slot: slot name + template selector (small dropdown/segmented to swap template) + for each component a row of selectable chips showing `name` and the amount (respecting `amountOverrides`/`amountNote`). Respect `pick` (pick 2 → up to two chips). Weekly-limit badges on chips. Check add-ons as small toggles. Big "✓ אכלתי" done button. Card shows warnings (workout rule, limits). Eating-out card: extras stepper (+/-) with the bank-charge explanation and free text.
 - **Bank card ("בנק 250")**: progress ring/bar of today's remaining kcal; list of entries charged to today (including ones that came from other days, labelled "מיום X"); buttons "+ חטיף", "+ אלכוהול", "+ אחר" opening a bottom sheet with presets + custom kcal + charge-date choice; swipe/trash to delete. Show upcoming days that are already pre-spent ("מחר כבר נוצלו 250").
 - **Water**: glass counter with +/− and goal progress.
+- **Steps**: optional daily numeric total copied from the phone's health app, +1,000/−1,000 buttons (clamped at zero), formatted total/goal and a progress bar. Clearing the input removes the value; edits autosave like other day fields.
 - **Weight**: optional numeric input (kg, 1 decimal); show delta vs last recorded weight.
 - **Notes**: free text area (autosave).
 - Small "weekly limits" strip at the bottom: salmon x/3, tuna-in-oil x/3, eating out x/2, workouts this week.
@@ -253,6 +256,8 @@ Range selector: 7 ימים / 30 יום / 90 יום / הכל. Charts (recharts, R
 - Daily adherence score bars.
 - Bank usage per day (spent vs budget line).
 - Water per day vs goal.
+- Daily steps bars with a reference line at `stepsGoal`; missing totals count as zero.
+- Summary tile `ממוצע צעדים`: rounded sum divided by all calendar days in the selected range.
 - Workouts per week bars.
 - Top chosen foods (horizontal bars, per component type).
 - Summary tiles: average adherence, streak of on-plan days, current weight & change, workouts this month, eat-outs this month.
@@ -348,11 +353,13 @@ Changes autosave. Deleting an option/template must not break old logs: logs keep
 
 ## 8. Daily habits, water units and weekly report
 
-- Settings includes daily habit CRUD/reorder with confirmed deletion. Defaults: `steps10k` (10 אלף צעדים 🚶), `aerobic` (אירובי 🏃), `noScreen` (אכלתי בלי טלפון ובלי מסך 📵). Today shows switches beside the workout card. Deleting a habit preserves its historical checks.
+- Settings includes daily habit CRUD/reorder with confirmed deletion. Defaults: `aerobic` (אירובי 🏃), `noScreen` (אכלתי בלי טלפון ובלי מסך 📵). Today shows switches beside the workout card. Deleting a habit preserves its historical checks. Steps use the separate numeric `DayLog.steps` counter and a positive integer `stepsGoal` (default 10000), editable under יעדים.
 - **Water storage choice:** `DayLog.water` stays an integer cup count. `waterGoal` is expressed in `waterUnit`; `cupMl` converts cups to liters. Daily +/- still changes exactly one cup. Unit switching converts the goal to preserve its volume. Changing cup size reinterprets all recorded cup counts using the new size, without rewriting historical records. Today, Week, charts, evening summaries and weekly tasks share `src/lib/water.ts`. Meeting the goal means total >= goal.
 - **Compatibility:** schema/key/backup version stays 1. `withSettingsDefaults`, called by local migration, backup parsing and cloud settings pulls, clones defaults for absent habits/report fields and adds `waterUnit: 'cups'`, `cupMl: 250`. Existing water values and goals are already cups, so they need no numeric conversion. Optional absent day habits mean unchecked. Explicit empty lists stay empty. Menu export contains these fields; legacy imports retain current habits/report configuration, but interpret their water goal as cups with the historical 250 ml size. Personal report starting weight is retained on menu-only import, like weightGoal/theme; full backups restore it.
 - The report is available from Week and on the configured first day via Today's banner. Its default range is the preceding week on the first day, otherwise the current week. Week arrows regenerate the draft. For Monday-start weeks, weigh-ins use the configured last day (Sunday) and the next day (Monday), following the same last-day/next-day rule as Saturday/Sunday for the default week.
 - Starting weight uses `weeklyReport.startWeight` or the first logged weight. Each weekly weight prefers the following day's weight, then the last day's weight, then the last recorded weight within that week. Rating rounds the average existing adherence score for logged days / 10, clamped 1–10; an unlogged week therefore starts at 1. All-day tasks require all seven calendar days.
-- `weeklyReport` has `startWeight?`, `workoutTarget` (3), `aerobicTarget` (3), and ordered `tasks: { id, label, rule }[]`. Rules are tagged by `type`: `water-every-day`, `habit-every-day` (`habitId`), `habit-count` (`habitId`, `n?`), `workout-count` (`n?`), `rating-10`, `manual`. An omitted count follows the corresponding report target; an explicit count overrides it. The standard numeric aerobic label follows its effective target. Labels/rules/order are editable in Settings.
+- `weeklyReport` has `startWeight?`, `workoutTarget` (3), `aerobicTarget` (3), and ordered `tasks: { id, label, rule }[]`. Rules are tagged by `type`: `water-every-day`, `steps-average`, `habit-every-day` (`habitId`), `habit-count` (`habitId`, `n?`), `workout-count` (`n?`), `rating-10`, `manual`. An omitted count follows the corresponding report target; an explicit count overrides it. The standard numeric aerobic label follows its effective target. Labels/rules/order are editable in Settings.
+- **Steps compatibility:** the v1 storage/backup format stays unchanged. `withSettingsDefaults` adds `stepsGoal` when absent, removes only the `steps10k` habit, and converts every `habit-every-day(steps10k)` task to `steps-average`, preserving IDs, labels and order. Local storage, backups and cloud pulls share this helper. Menu imports apply the same migration and retain the current steps goal when it is absent from the import. Historical `habits.steps10k` remains in day logs and never fabricates step counts; timestamps and pending sync metadata remain unchanged.
+- **Steps report:** the rounded average is the sum over exactly seven report days divided by seven, with missing days/totals as zero. Done means average >= `stepsGoal`. The task reason is `ממוצע 10,450 · יעד 10,000`; its message line is `<label> - ממוצע <formatted average>` followed by ` ✅` only when done. Other lines retain their format. Evening summaries add `צעדים 8,450/10,000` only when the day's steps value is present, including an explicit zero.
 - All report calculations/formatting live in `src/lib/report.ts`. Report edits and checkbox overrides are component-local and never mutate day logs or settings. Preview/copy/share use the exact newline-delimited Hebrew message with one decimal for weights, blanks for missing weights, and ✅ only after completed tasks. Clipboard failure tries a temporary textarea; share falls back to the encoded WhatsApp link.
 - **Weekly push:** opt-in, Sunday 10:00 by default, stored in notification_prefs. It uses the user's timezone and the same three-hour same-day window as evening summaries, with a separate atomic last_weekly_sent_date claim. The existing device subscription is reused; the shared subscribe flow runs only if missing. Payload opens `#/report`. Migration `0005_weekly_report_reminder.sql` is additive and preserves RLS/policies/grants. A human must review/apply it, then deploy the updated push function and client; the existing five-minute cron job serves both reminders.

@@ -16,9 +16,10 @@ beforeEach(() => {
 });
 afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
 describe('persisted store', () => {
-  it('persists meals, bank, workout, habits, water, weight and notes across a reload', async () => {
+  it('persists meals, bank, workout, habits, steps, water, weight and notes across a reload', async () => {
     let store = await import('./store');
-    store.editDay('2026-10-08', d => { d.workout = true; d.habits = { steps10k: true, aerobic: false }; d.water = 4; d.weight = 75.5; d.notes = 'יום טוב'; d.meals[2].templateId = 'eatOut'; d.meals[2].extras = 1; d.meals[2].done = true; d.meals[2].selections = { 'eatout-food': ['pizza'] }; });
+    store.editSettings(s => { s.stepsGoal = 8500; });
+    store.editDay('2026-10-08', d => { d.workout = true; d.habits = { aerobic: false }; d.steps = 8450; d.water = 4; d.weight = 75.5; d.notes = 'יום טוב'; d.meals[2].templateId = 'eatOut'; d.meals[2].extras = 1; d.meals[2].done = true; d.meals[2].selections = { 'eatout-food': ['pizza'] }; });
     const before = store.getState(); expect(before.meta.dirtyDays).toContain('2026-10-08');
     vi.resetModules(); store = await import('./store');
     expect(store.getState()).toEqual(before); expect(store.getState().logs['2026-10-08'].bank).toHaveLength(2);
@@ -28,7 +29,7 @@ describe('persisted store', () => {
     store.editDay('2026-10-07', d => { d.habits = { steps10k: true, noScreen: true }; d.water = 5; });
     const log = structuredClone(store.getState().logs['2026-10-07']);
     store.editSettings(s => {
-      s.habits[0].name = 'הליכה'; s.habits.splice(2, 1);
+      s.habits[0].name = 'הליכה'; s.habits.splice(1, 1);
       s.waterUnit = 'liters'; s.waterGoal = 2.5; s.cupMl = 300; s.weeklyReport.aerobicTarget = 4;
     });
     expect(store.getState().logs['2026-10-07']).toEqual(log);
