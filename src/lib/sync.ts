@@ -3,7 +3,8 @@ import { useSyncExternalStore } from 'react';
 import type { Logs, Settings } from '../types';
 import { getState, setState, subscribe } from '../store/store';
 import { supabase } from './supabase';
-import { syncOnce, type SyncTransport } from './sync-engine';
+import { emptyData } from './storage';
+import { resolveSignIn, syncOnce, type SyncTransport } from './sync-engine';
 import { isDayLog, isSettings } from './validation';
 
 type SyncStatus = 'local' | 'signedOut' | 'offline' | 'syncing' | 'synced' | 'error';
@@ -85,11 +86,8 @@ function setSession(session: Session | null) {
   userId = nextId;
   update({ email: session?.user.email, status: userId ? 'syncing' : 'signedOut', error: undefined });
   if (userId) {
-    const current = getState();
-    // A cursor belongs to one account only. First sign-in always uploads local records too.
-    const first = current.meta.syncUserId !== userId;
-    setState({ ...current, meta: { ...current.meta, syncUserId: userId, lastPulledAt: undefined,
-      dirtyDays: first ? Object.keys(current.logs) : current.meta.dirtyDays, settingsDirty: first || current.meta.settingsDirty } });
+    // A cursor belongs to one account only; data tied to another account is reset before syncing.
+    setState(resolveSignIn(getState(), userId));
     void syncNow();
   }
 }
@@ -128,4 +126,25 @@ export async function signOut(): Promise<void> {
     const { error } = await supabase.auth.signOut({ scope: 'local' });
     if (error) throw new Error('ההתנתקות לא הושלמה. נסו שוב כשיש חיבור לרשת.');
   }
+}
+const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
+const hasUnsynced = () => { const { meta } = getState(); return meta.dirtyDays.length > 0 || meta.settingsDirty; };
+async function finalSync(): Promise<void> {
+  const deadline = Date.now() + 5000;
+  const attempt = async () => {
+    await Promise.race([syncNow(), sleep(Math.max(0, deadline - Date.now()))]);
+    while (running && Date.now() < deadline) await sleep(100);
+  };
+  await attempt();
+  if (hasUnsynced() && Date.now() < deadline) await attempt();
+}
+// Explicit sign-out: push pending changes, then leave the device with a clean slate. Returns false if cancelled.
+export async function signOutAndReset(): Promise<boolean> {
+  if (supabase && userId) {
+    await finalSync();
+    if (hasUnsynced() && !window.confirm('יש שינויים שעדיין לא סונכרנו לענן. אם תתנתקו עכשיו הם יימחקו מהמכשיר. להתנתק בכל זאת?')) return false;
+  }
+  await signOut();
+  setState(emptyData());
+  return true;
 }

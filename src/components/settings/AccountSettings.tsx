@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Cloud, RefreshCw } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-import { signOut, syncLabels, syncNow, useSync } from '../../lib/sync';
+import { signOutAndReset, syncLabels, syncNow, useSync } from '../../lib/sync';
 import { useStore } from '../../store/hooks';
 import { Field } from '../ui';
 export function AccountSettings() {
@@ -13,7 +13,7 @@ export function AccountSettings() {
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
   if (!supabase) return <div className="local-mode"><Cloud size={28} /><h3>סנכרון לא הוגדר</h3><p>אפשר להמשיך כרגיל. כל הרישומים נשמרים במכשיר הזה, ואפשר לייצא גיבוי בכל רגע.</p></div>;
-  return <div className="stack">{sync.email ? <><p>מחובר: <bdi>{sync.email}</bdi></p><p className="muted">{syncLabels[sync.status]}{meta.lastSyncedAt && ` · סנכרון אחרון: ${new Date(meta.lastSyncedAt).toLocaleString('he-IL')}`}</p><button className="secondary-button" disabled={sync.status === 'syncing'} onClick={() => { void syncNow(); }}><RefreshCw size={17} />סנכרן עכשיו</button><button onClick={async () => { try { await signOut(); } catch (error) { setMessage((error as Error).message); } }}>התנתקות</button></> : <form className="stack" onSubmit={async e => {
+  return <div className="stack">{sync.email ? <><p>מחובר: <bdi>{sync.email}</bdi></p><p className="muted">{syncLabels[sync.status]}{meta.lastSyncedAt && ` · סנכרון אחרון: ${new Date(meta.lastSyncedAt).toLocaleString('he-IL')}`}</p><button className="secondary-button" disabled={sync.status === 'syncing'} onClick={() => { void syncNow(); }}><RefreshCw size={17} />סנכרן עכשיו</button><button onClick={async () => { try { await signOutAndReset(); } catch (error) { setMessage((error as Error).message); } }}>התנתקות</button></> : <form className="stack" onSubmit={async e => {
     e.preventDefault(); if (!supabase) return;
     setBusy(true); setMessage('');
     try {

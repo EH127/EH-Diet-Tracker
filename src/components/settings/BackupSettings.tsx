@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Download, Upload } from 'lucide-react';
-import type { Backup } from '../../types';
+import type { Backup, Settings } from '../../types';
 import { dateKey } from '../../lib/dates';
+import { buildMenuExport, mergeMenu, parseMenuFile } from '../../lib/menu';
 import { parseBackup } from '../../lib/validation';
 import { readRawStorage } from '../../lib/storage';
 import { signOut } from '../../lib/sync';
@@ -21,6 +22,14 @@ export function BackupSettings() {
       const file = e.target.files?.[0]; e.target.value = ''; if (!file) return;
       try { if (file.size > 20 * 1024 * 1024) throw new Error('הקובץ גדול מדי. ניתן לייבא עד 20 מגה־בייט.'); setBackup(parseBackup(JSON.parse(await file.text()))); setMessage(''); }
       catch (error) { setMessage(error instanceof SyntaxError ? 'הקובץ אינו JSON תקין. הנתונים לא השתנו.' : (error as Error).message); }
+    }} /></label><button className="secondary-button" onClick={() => { download(JSON.stringify(buildMenuExport(getState().settings), null, 2), `menu-${dateKey()}.json`); }}><Download size={18} />ייצוא התפריט בלבד</button><label className="upload-button"><Upload size={18} />ייבוא תפריט<input type="file" accept="application/json,.json" onChange={async e => {
+      const file = e.target.files?.[0]; e.target.value = ''; if (!file) return;
+      try {
+        if (file.size > 20 * 1024 * 1024) throw new Error('הקובץ גדול מדי. ניתן לייבא עד 20 מגה־בייט.');
+        const menu: Settings = parseMenuFile(JSON.parse(await file.text()));
+        if (!window.confirm('התפריט הנוכחי יוחלף בתפריט מהקובץ. יומן הימים לא ישתנה. להמשיך?')) return;
+        editSettings(s => Object.assign(s, mergeMenu(s, menu))); setMessage('התפריט יובא בהצלחה.');
+      } catch (error) { setMessage(error instanceof SyntaxError ? 'הקובץ אינו JSON תקין. הנתונים לא השתנו.' : (error as Error).message); }
     }} /></label><button onClick={() => { if (window.confirm('להחזיר את התפריט והיעדים לברירת המחדל? יומן הימים נשמר.')) { editSettings(s => Object.assign(s, freshSettings())); setMessage('ההגדרות חזרו לברירת המחדל.'); } }}>איפוס הגדרות לברירת מחדל</button><button className="text-danger" onClick={async () => {
       if (!window.confirm('למחוק את כל הנתונים מהמכשיר ולהתנתק? הנתונים בענן נשארים. מומלץ לייצא גיבוי קודם.')) return;
       if (window.prompt('לאישור המחיקה, הקלידו: מחיקה') !== 'מחיקה') return;

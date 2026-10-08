@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { syncOnce, type SyncTransport } from './sync-engine';
+import { resolveSignIn, syncOnce, type SyncTransport } from './sync-engine';
 import { emptyData } from './storage';
 import { day } from './test-helpers';
 import type { StoreData } from '../types';
@@ -43,5 +43,25 @@ describe('offline-first sync transactions', () => {
     const { get, set, transport } = fixture(); const before = get();
     await syncOnce(transport, get, set, () => false);
     expect(get()).toBe(before); expect(transport.pushDays).not.toHaveBeenCalled();
+  });
+});
+describe('sign-in account safety', () => {
+  const withLogs = (syncUserId?: string) => { const s = emptyData(); s.logs['2026-10-04'] = day(); s.meta = { dirtyDays: [], settingsDirty: false, syncUserId, lastPulledAt: '2026-10-01T00:00:00Z' }; return s; };
+  it('merges and uploads pure guest data on first sign-in', () => {
+    const next = resolveSignIn(withLogs(), 'u1');
+    expect(next.logs).toEqual(withLogs().logs);
+    expect(next.meta).toMatchObject({ syncUserId: 'u1', dirtyDays: ['2026-10-04'], settingsDirty: true, lastPulledAt: undefined });
+  });
+  it('leaves the same user unchanged apart from resetting the cursor', () => {
+    const current = withLogs('u1'); current.meta.dirtyDays = ['2026-10-04'];
+    const next = resolveSignIn(current, 'u1');
+    expect(next.logs).toBe(current.logs);
+    expect(next.meta).toMatchObject({ syncUserId: 'u1', dirtyDays: ['2026-10-04'], settingsDirty: false });
+  });
+  it('resets everything and marks nothing dirty when a different user signs in', () => {
+    const current = withLogs('u1'); current.meta.dirtyDays = ['2026-10-04']; current.meta.settingsDirty = true;
+    const next = resolveSignIn(current, 'u2');
+    expect(next.logs).toEqual({}); expect(next.settings).toEqual(emptyData().settings);
+    expect(next.meta).toEqual({ dirtyDays: [], settingsDirty: false, syncUserId: 'u2' });
   });
 });
