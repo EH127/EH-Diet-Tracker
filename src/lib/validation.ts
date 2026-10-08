@@ -28,15 +28,40 @@ function snackCatalog(v: unknown): boolean {
   const all = (v as SnackCategory[]).flatMap(c => c.items);
   return new Set(all.map(i => i.id)).size === all.length;
 }
-// Older settings lack newly added catalogs; preserve edits, including intentionally empty lists.
-export const withSettingsDefaults = (s: Settings): Settings =>
-  s.deviationCategories && s.snackCatalog ? s : { ...s,
+function reportRule(v: unknown): boolean {
+  if (!obj(v)) return false;
+  switch (v.type) {
+    case 'water-every-day': case 'rating-10': case 'manual': return true;
+    case 'habit-every-day': return id(v.habitId);
+    case 'habit-count': return id(v.habitId) && optional(v.n, n => integer(n) && n > 0);
+    case 'workout-count': return optional(v.n, n => integer(n) && n > 0);
+    default: return false;
+  }
+}
+// Defaults cover local storage, backups and cloud pulls. Empty lists are deliberate.
+// Legacy water and waterGoal stay in cups; no day-log rewrite or timestamp change.
+export const withSettingsDefaults = (s: Settings): Settings => {
+  if (s.deviationCategories && s.snackCatalog && s.habits && s.waterUnit && s.cupMl
+    && s.weeklyReport?.workoutTarget !== undefined && s.weeklyReport?.aerobicTarget !== undefined && s.weeklyReport?.tasks) return s;
+  return { ...s,
     deviationCategories: s.deviationCategories ?? structuredClone(defaultSettings.deviationCategories),
-    snackCatalog: s.snackCatalog ?? structuredClone(defaultSettings.snackCatalog) };
+    snackCatalog: s.snackCatalog ?? structuredClone(defaultSettings.snackCatalog),
+    habits: s.habits ?? structuredClone(defaultSettings.habits),
+    waterUnit: s.waterUnit ?? 'cups', cupMl: s.cupMl ?? 250,
+    weeklyReport: { ...s.weeklyReport,
+      workoutTarget: s.weeklyReport?.workoutTarget ?? 3, aerobicTarget: s.weeklyReport?.aerobicTarget ?? 3,
+      tasks: s.weeklyReport?.tasks ?? structuredClone(defaultSettings.weeklyReport.tasks) },
+  };
+};
 export function isSettings(v: unknown): v is Settings {
   if (!obj(v)) return false;
   return v.version === 1 && (v.weekStartsOn === 0 || v.weekStartsOn === 1) && num(v.dailyBankKcal)
-    && integer(v.waterGoal) && v.waterGoal > 0 && optional(v.weightGoal, n => num(n) && n > 0)
+    && num(v.waterGoal) && v.waterGoal > 0 && optional(v.weightGoal, n => num(n) && n > 0)
+    && optional(v.waterUnit, u => u === 'cups' || u === 'liters') && optional(v.cupMl, n => integer(n) && n > 0)
+    && optional(v.habits, h => items(h, x => str(x.name) && optional(x.emoji, str)))
+    && optional(v.weeklyReport, r => obj(r) && optional(r.startWeight, n => num(n) && n > 0)
+      && optional(r.workoutTarget, n => integer(n) && n > 0) && optional(r.aerobicTarget, n => integer(n) && n > 0)
+      && optional(r.tasks, t => items(t, x => str(x.label) && reportRule(x.rule))))
     && ['system', 'light', 'dark'].includes(String(v.theme)) && stamp(v.updatedAt) && strings(v.rules)
     && items(v.groups, g => str(g.name) && items(g.options, o => str(o.name) && str(o.amount) && bool(o.active)
       && optional(o.kcal, num) && optional(o.weeklyLimit, integer) && optional(o.note, str)))
@@ -52,6 +77,7 @@ export function isSettings(v: unknown): v is Settings {
 export function isDayLog(v: unknown): v is DayLog {
   return obj(v) && isDateKey(v.date) && bool(v.workout) && integer(v.water) && stamp(v.updatedAt)
     && optional(v.weight, n => num(n) && n > 0) && optional(v.notes, str)
+    && optional(v.habits, h => record(h, bool))
     && Array.isArray(v.meals) && v.meals.every(m => obj(m) && id(m.slotId) && str(m.templateId) && bool(m.done)
       && record(m.selections, strings) && optional(m.extras, n => integer(n) && n <= 100) && optional(m.freeText, str))
     && new Set(v.meals.map(m => (m as Obj).slotId)).size === v.meals.length

@@ -1,7 +1,7 @@
 import { supabase } from './supabase';
 import { isIos, isStandalone } from './install';
 
-export type PushPrefs = { evening_enabled: boolean; evening_time: string };
+export type PushPrefs = { evening_enabled: boolean; evening_time: string; weekly_enabled: boolean; weekly_day: number; weekly_time: string };
 export const pushSupported = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
 export type PushAvailability = 'ok' | 'ios-install' | 'unsupported' | 'denied';
 export function pushAvailability(): PushAvailability {
@@ -18,27 +18,32 @@ const hhmm = (time: string) => time.slice(0, 5);
 
 export async function loadPrefs(): Promise<PushPrefs | null> {
   if (!supabase) return null;
-  const { data, error } = await supabase.from('notification_prefs').select('evening_enabled,evening_time').maybeSingle();
+  const { data, error } = await supabase.from('notification_prefs').select('evening_enabled,evening_time,weekly_enabled,weekly_day,weekly_time').maybeSingle();
   if (error) throw error;
-  return data ? { evening_enabled: data.evening_enabled, evening_time: hhmm(data.evening_time) } : null;
+  return data ? { evening_enabled: data.evening_enabled, evening_time: hhmm(data.evening_time),
+    weekly_enabled: data.weekly_enabled ?? false, weekly_day: data.weekly_day ?? 0, weekly_time: hhmm(data.weekly_time ?? '10:00') } : null;
 }
 // Must be called from a click handler so the permission prompt is allowed.
-export async function enableEvening(time: string): Promise<void> {
+async function enablePrefs(patch: Partial<PushPrefs>): Promise<void> {
   if (!supabase) throw new Error('no client');
-  const permission = await Notification.requestPermission();
+  const permission = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission();
   if (permission !== 'granted') throw new Error('denied');
-  const { data, error } = await supabase.functions.invoke('push', { body: { action: 'key' } });
-  if (error || !data?.applicationServerKey) throw new Error('key');
   const registration = await navigator.serviceWorker.ready;
-  const subscription = await registration.pushManager.getSubscription()
-    ?? await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(data.applicationServerKey) });
+  let subscription = await registration.pushManager.getSubscription();
+  if (!subscription) {
+    const { data, error } = await supabase.functions.invoke('push', { body: { action: 'key' } });
+    if (error || !data?.applicationServerKey) throw new Error('key');
+    subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(data.applicationServerKey) });
+  }
   const keys = subscription.toJSON().keys;
   if (!keys?.p256dh || !keys.auth) throw new Error('subscription');
   const sub = await supabase.from('push_subscriptions').upsert({ endpoint: subscription.endpoint, p256dh: keys.p256dh, auth: keys.auth, user_agent: navigator.userAgent }, { onConflict: 'endpoint' });
   if (sub.error) throw sub.error;
-  const prefs = await supabase.from('notification_prefs').upsert({ evening_enabled: true, evening_time: time, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
+  const prefs = await supabase.from('notification_prefs').upsert({ ...patch, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
   if (prefs.error) throw prefs.error;
 }
+export const enableEvening = (time: string): Promise<void> => enablePrefs({ evening_enabled: true, evening_time: time });
+export const enableWeekly = (day: number, time: string): Promise<void> => enablePrefs({ weekly_enabled: true, weekly_day: day, weekly_time: time });
 export async function updatePrefs(patch: Partial<PushPrefs>): Promise<void> {
   if (!supabase) throw new Error('no client');
   const { data: { session } } = await supabase.auth.getSession();

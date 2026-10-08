@@ -1,7 +1,7 @@
 // Deployed with verify_jwt = false. Actions: key | test | cron.
 import * as webpush from 'jsr:@negrel/webpush@0.5.0';
 import { createClient } from 'npm:@supabase/supabase-js@2';
-import { isDue, safeLocalParts, selectPayload, type Payload, type Prefs } from './logic.ts';
+import { isDue, isWeeklyDue, safeLocalParts, selectPayload, weeklyPayload, type Payload, type Prefs } from './logic.ts';
 
 const admin = createClient(Deno.env.get('SUPABASE_URL')!,
   (JSON.parse(Deno.env.get('SUPABASE_SECRET_KEYS') ?? '{}').default ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'))!,
@@ -76,20 +76,32 @@ Deno.serve(async (req: Request) => {
       const { config } = await load();
       const token = req.headers.get('x-cron-token');
       if (!token || token !== config.cron_token) return json({ error: 'forbidden' }, 403);
-      const { data, error } = await admin.from('notification_prefs').select('*').eq('evening_enabled', true);
+      const { data, error } = await admin.from('notification_prefs').select('*').or('evening_enabled.eq.true,weekly_enabled.eq.true');
       if (error) throw error;
       const now = new Date();
       let due = 0, sent = 0, removed = 0;
       for (const prefs of (data ?? []) as Prefs[]) {
-        if (!isDue(prefs, now)) continue;
         const { date } = safeLocalParts(now, prefs.timezone);
-        // Claim the day atomically so overlapping runs never double-send.
-        const { data: claimed, error: claimError } = await admin.from('notification_prefs').update({ last_sent_date: date })
-          .eq('user_id', prefs.user_id).or(`last_sent_date.is.null,last_sent_date.neq.${date}`).select();
-        if (claimError || !claimed?.length) continue;
-        due++;
-        const result = await sendToUser(prefs.user_id, selectPayload(prefs, date));
-        sent += result.sent; removed += result.removed;
+        if (isDue(prefs, now)) {
+          // Claim the day atomically so overlapping runs never double-send.
+          const { data: claimed, error: claimError } = await admin.from('notification_prefs').update({ last_sent_date: date })
+            .eq('user_id', prefs.user_id).or(`last_sent_date.is.null,last_sent_date.neq.${date}`).select();
+          if (!claimError && claimed?.length) {
+            due++;
+            const result = await sendToUser(prefs.user_id, selectPayload(prefs, date));
+            sent += result.sent; removed += result.removed;
+          }
+        }
+        if (isWeeklyDue(prefs, now)) {
+          // Separate claim: an evening send must not consume the weekly reminder.
+          const { data: claimed, error: claimError } = await admin.from('notification_prefs').update({ last_weekly_sent_date: date })
+            .eq('user_id', prefs.user_id).or(`last_weekly_sent_date.is.null,last_weekly_sent_date.neq.${date}`).select();
+          if (!claimError && claimed?.length) {
+            due++;
+            const result = await sendToUser(prefs.user_id, weeklyPayload);
+            sent += result.sent; removed += result.removed;
+          }
+        }
       }
       return json({ due, sent, removed });
     }

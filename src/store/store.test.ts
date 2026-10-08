@@ -16,12 +16,26 @@ beforeEach(() => {
 });
 afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
 describe('persisted store', () => {
-  it('persists meals, bank, workout, water, weight and notes across a reload', async () => {
+  it('persists meals, bank, workout, habits, water, weight and notes across a reload', async () => {
     let store = await import('./store');
-    store.editDay('2026-10-08', d => { d.workout = true; d.water = 4; d.weight = 75.5; d.notes = 'יום טוב'; d.meals[2].templateId = 'eatOut'; d.meals[2].extras = 1; d.meals[2].done = true; d.meals[2].selections = { 'eatout-food': ['pizza'] }; });
+    store.editDay('2026-10-08', d => { d.workout = true; d.habits = { steps10k: true, aerobic: false }; d.water = 4; d.weight = 75.5; d.notes = 'יום טוב'; d.meals[2].templateId = 'eatOut'; d.meals[2].extras = 1; d.meals[2].done = true; d.meals[2].selections = { 'eatout-food': ['pizza'] }; });
     const before = store.getState(); expect(before.meta.dirtyDays).toContain('2026-10-08');
     vi.resetModules(); store = await import('./store');
     expect(store.getState()).toEqual(before); expect(store.getState().logs['2026-10-08'].bank).toHaveLength(2);
+  });
+  it('keeps habit history when a habit is edited or deleted and persists liter goals/report targets', async () => {
+    let store = await import('./store');
+    store.editDay('2026-10-07', d => { d.habits = { steps10k: true, noScreen: true }; d.water = 5; });
+    const log = structuredClone(store.getState().logs['2026-10-07']);
+    store.editSettings(s => {
+      s.habits[0].name = 'הליכה'; s.habits.splice(2, 1);
+      s.waterUnit = 'liters'; s.waterGoal = 2.5; s.cupMl = 300; s.weeklyReport.aerobicTarget = 4;
+    });
+    expect(store.getState().logs['2026-10-07']).toEqual(log);
+    expect(store.getState().meta.settingsDirty).toBe(true);
+    vi.resetModules(); store = await import('./store');
+    expect(store.getState().settings).toMatchObject({ waterUnit: 'liters', waterGoal: 2.5, cupMl: 300, weeklyReport: { aerobicTarget: 4 } });
+    expect(store.getState().logs['2026-10-07'].habits).toEqual({ steps10k: true, noScreen: true });
   });
   it('does one full pull after upgrading a future client-clock cursor, then resumes incremental pulls across reloads', async () => {
     const legacy = emptyData(); delete legacy.meta.cursorVersion; legacy.meta.lastPulledAt = '2099-01-01T00:00:00Z';

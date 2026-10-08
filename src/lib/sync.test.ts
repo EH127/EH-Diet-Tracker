@@ -70,12 +70,23 @@ describe('server-timestamp sync transport', () => {
   it('defaults missing catalogs on pulled legacy settings without changing the server data or edit time', async () => {
     const { transport } = await import('./sync');
     const expected = settings(); const old: Partial<Settings> = { ...expected }; delete old.snackCatalog; delete old.deviationCategories;
+    delete old.habits; delete old.weeklyReport; delete old.waterUnit; delete old.cupMl;
     cloud.user_settings.push(row(old as Settings, cloud.stamp));
     const remote = await transport('u1').pull();
     expect(remote.settings).toEqual(expected); expect(remote.cursor).toBe(cloud.stamp);
     expect(old).not.toHaveProperty('snackCatalog');
     remote.settings!.snackCatalog[0].items[0].name = 'שם מותאם';
+    remote.settings!.habits[0].name = 'משימה מותאמת'; remote.settings!.weeklyReport.tasks[0].label = 'מים מותאמים';
     expect((await transport('u1').pull()).settings).toEqual(expected);
+  });
+  it('roundtrips habits, decimal liter goals and report settings without changing cup counts', async () => {
+    const { transport } = await import('./sync');
+    const menu = settings(); menu.waterUnit = 'liters'; menu.waterGoal = 2.5; menu.cupMl = 300; menu.habits = [];
+    menu.weeklyReport = { startWeight: 85, workoutTarget: 4, aerobicTarget: 2, tasks: [] };
+    const log = day('2026-10-08', { water: 5, habits: { steps10k: true, deleted: false } });
+    await transport('u1').pushSettings(menu); await transport('u1').pushDays([log]);
+    const remote = await transport('u1').pull();
+    expect(remote.settings).toEqual(menu); expect(remote.logs[log.date]).toEqual(log);
   });
   it.each([{ snackCatalog: [] }, { snackCatalog: [{ id: 'custom', name: 'מותאם', items: [{ id: 'item', name: 'פריט', kcal: 80 }] }] }])('preserves a pulled catalog, including an empty one (%#)', async ({ snackCatalog }) => {
     const { transport } = await import('./sync');

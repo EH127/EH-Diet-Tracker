@@ -22,6 +22,7 @@ Data is offline-first in `localStorage` and synced to Supabase when the user is 
 - `oxlint` — lint (`npm run lint`).
 
 No router library: use simple tab state in React, persisted to `location.hash` (`#/today`, `#/week`, `#/stats`, `#/menu`, `#/settings`) so refresh/back works on GitHub Pages without 404s.
+The weekly dietitian report uses the additional route `#/report`.
 
 `vite.config.ts`: `base: '/EH-Diet-Tracker/'`. Make sure the PWA manifest `start_url`/`scope` and icon paths respect the base.
 
@@ -94,7 +95,11 @@ type Settings = {
   version: number;
   weekStartsOn: 0 | 1;              // 0 = Sunday (default)
   dailyBankKcal: number;            // 250
-  waterGoal: number;                // glasses per day, default 8
+  waterGoal: number;                // chosen waterUnit per day, default 8 cups
+  waterUnit: 'cups' | 'liters';      // default cups
+  cupMl: number;                    // default 250 ml per cup
+  habits: { id: string; name: string; emoji?: string }[];
+  weeklyReport: WeeklyReportSettings; // optional starting weight, targets and ordered task rules
   weightGoal?: number;              // kg, optional
   theme: 'system' | 'light' | 'dark';
   groups: OptionGroup[];
@@ -203,6 +208,7 @@ type DayLog = {
   meals: MealEntry[];        // one per slot (create lazily from settings.slots + defaultTemplateId)
   bank: BankEntry[];         // entries ORIGINATING on this day (chargeDate may point elsewhere)
   water: number;             // glasses
+  habits?: Record<string, boolean>; // habit id -> checked; missing means unchecked
   weight?: number;           // kg
   notes?: string;
   updatedAt: string;         // ISO, for sync LWW
@@ -337,3 +343,16 @@ Changes autosave. Deleting an option/template must not break old logs: logs keep
 - Export → clear → import restores everything.
 - Lighthouse-style basics: installable PWA (manifest + SW + icons), works offline after first load.
 - No horizontal scroll at 360px; dark mode looks right.
+
+---
+
+## 8. Daily habits, water units and weekly report
+
+- Settings includes daily habit CRUD/reorder with confirmed deletion. Defaults: `steps10k` (10 אלף צעדים 🚶), `aerobic` (אירובי 🏃), `noScreen` (אכלתי בלי טלפון ובלי מסך 📵). Today shows switches beside the workout card. Deleting a habit preserves its historical checks.
+- **Water storage choice:** `DayLog.water` stays an integer cup count. `waterGoal` is expressed in `waterUnit`; `cupMl` converts cups to liters. Daily +/- still changes exactly one cup. Unit switching converts the goal to preserve its volume. Changing cup size reinterprets all recorded cup counts using the new size, without rewriting historical records. Today, Week, charts, evening summaries and weekly tasks share `src/lib/water.ts`. Meeting the goal means total >= goal.
+- **Compatibility:** schema/key/backup version stays 1. `withSettingsDefaults`, called by local migration, backup parsing and cloud settings pulls, clones defaults for absent habits/report fields and adds `waterUnit: 'cups'`, `cupMl: 250`. Existing water values and goals are already cups, so they need no numeric conversion. Optional absent day habits mean unchecked. Explicit empty lists stay empty. Menu export contains these fields; legacy imports retain current habits/report configuration, but interpret their water goal as cups with the historical 250 ml size. Personal report starting weight is retained on menu-only import, like weightGoal/theme; full backups restore it.
+- The report is available from Week and on the configured first day via Today's banner. Its default range is the preceding week on the first day, otherwise the current week. Week arrows regenerate the draft. For Monday-start weeks, weigh-ins use the configured last day (Sunday) and the next day (Monday), following the same last-day/next-day rule as Saturday/Sunday for the default week.
+- Starting weight uses `weeklyReport.startWeight` or the first logged weight. Each weekly weight prefers the following day's weight, then the last day's weight, then the last recorded weight within that week. Rating rounds the average existing adherence score for logged days / 10, clamped 1–10; an unlogged week therefore starts at 1. All-day tasks require all seven calendar days.
+- `weeklyReport` has `startWeight?`, `workoutTarget` (3), `aerobicTarget` (3), and ordered `tasks: { id, label, rule }[]`. Rules are tagged by `type`: `water-every-day`, `habit-every-day` (`habitId`), `habit-count` (`habitId`, `n?`), `workout-count` (`n?`), `rating-10`, `manual`. An omitted count follows the corresponding report target; an explicit count overrides it. The standard numeric aerobic label follows its effective target. Labels/rules/order are editable in Settings.
+- All report calculations/formatting live in `src/lib/report.ts`. Report edits and checkbox overrides are component-local and never mutate day logs or settings. Preview/copy/share use the exact newline-delimited Hebrew message with one decimal for weights, blanks for missing weights, and ✅ only after completed tasks. Clipboard failure tries a temporary textarea; share falls back to the encoded WhatsApp link.
+- **Weekly push:** opt-in, Sunday 10:00 by default, stored in notification_prefs. It uses the user's timezone and the same three-hour same-day window as evening summaries, with a separate atomic last_weekly_sent_date claim. The existing device subscription is reused; the shared subscribe flow runs only if missing. Payload opens `#/report`. Migration `0005_weekly_report_reminder.sql` is additive and preserves RLS/policies/grants. A human must review/apply it, then deploy the updated push function and client; the existing five-minute cron job serves both reminders.

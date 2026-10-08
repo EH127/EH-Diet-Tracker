@@ -3,12 +3,13 @@ import { addDays, dateRange, startOfWeek } from './dates';
 import { adherence } from './adherence';
 import { spent } from './bank';
 import { categoryName, deviationGroups, deviationsInRange } from './deviations';
+import { waterAmount } from './water';
 
 export function statsRows(from: string, to: string, logs: Logs, settings: Settings) {
   return dateRange(from, to).map(date => {
     const weights = dateRange(addDays(date, -6), date).map(d => logs[d]?.weight).filter((w): w is number => w !== undefined);
     return { date, weight: logs[date]?.weight, average: weights.length ? Math.round(weights.reduce((sum, n) => sum + n, 0) / weights.length * 10) / 10 : undefined,
-      adherence: adherence(date, logs, settings).score, spent: spent(date, logs), budget: settings.dailyBankKcal, water: logs[date]?.water ?? 0, waterGoal: settings.waterGoal };
+      adherence: adherence(date, logs, settings).score, spent: spent(date, logs), budget: settings.dailyBankKcal, water: waterAmount(logs[date]?.water ?? 0, settings), waterGoal: settings.waterGoal };
   });
 }
 export function workoutWeeks(from: string, to: string, logs: Logs, settings: Settings) {

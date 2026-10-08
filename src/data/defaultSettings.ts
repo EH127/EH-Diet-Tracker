@@ -7,7 +7,20 @@ const choice = (id: string, label: string, groupId: string, pick = 1, required =
 const mayo = (id: string): MealComponent => ({ id, kind: 'check', label: 'כף מיונז לייט' });
 
 export const defaultSettings: Settings = {
-  version: 1, weekStartsOn: 0, dailyBankKcal: 250, waterGoal: 8, theme: 'system',
+  version: 1, weekStartsOn: 0, dailyBankKcal: 250, waterGoal: 8, waterUnit: 'cups', cupMl: 250, theme: 'system',
+  habits: [
+    { id: 'steps10k', name: '10 אלף צעדים', emoji: '🚶' },
+    { id: 'aerobic', name: 'אירובי', emoji: '🏃' },
+    { id: 'noScreen', name: 'אכלתי בלי טלפון ובלי מסך', emoji: '📵' },
+  ],
+  weeklyReport: { workoutTarget: 3, aerobicTarget: 3, tasks: [
+    { id: 'water', label: 'מים', rule: { type: 'water-every-day' } },
+    { id: 'steps', label: '10 אלף צעדים', rule: { type: 'habit-every-day', habitId: 'steps10k' } },
+    { id: 'workouts', label: 'כל האימונים', rule: { type: 'workout-count' } },
+    { id: 'menu', label: 'עמידה בתפריט 10/10', rule: { type: 'rating-10' } },
+    { id: 'aerobic', label: '3 אירובי', rule: { type: 'habit-count', habitId: 'aerobic' } },
+    { id: 'noScreen', label: 'לאכול בלי טלפון ולא מול מסך', rule: { type: 'habit-every-day', habitId: 'noScreen' } },
+  ] },
   // Pristine defaults must never win against an edited cloud menu on first login.
   updatedAt: '1970-01-01T00:00:00.000Z',
   groups: [

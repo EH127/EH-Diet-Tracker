@@ -15,8 +15,19 @@ export type BankPreset = { id: string; kind: 'snack' | 'alcohol' | 'other'; name
 export type SnackItem = { id: string; name: string; portion?: string; kcal: number; note?: string };
 export type SnackCategory = { id: string; name: string; emoji?: string; items: SnackItem[] };
 export type DeviationCategory = { id: string; name: string; emoji?: string };
+export type Habit = { id: string; name: string; emoji?: string };
+export type WaterUnit = 'cups' | 'liters';
+export type ReportRule =
+  | { type: 'water-every-day' | 'rating-10' | 'manual' }
+  | { type: 'habit-every-day'; habitId: string }
+  // An omitted count follows the corresponding weekly report target.
+  | { type: 'habit-count'; habitId: string; n?: number }
+  | { type: 'workout-count'; n?: number };
+export type ReportTask = { id: string; label: string; rule: ReportRule };
+export type WeeklyReportSettings = { startWeight?: number; workoutTarget: number; aerobicTarget: number; tasks: ReportTask[] };
 export type Settings = {
   version: number; weekStartsOn: 0 | 1; dailyBankKcal: number; waterGoal: number; weightGoal?: number;
+  waterUnit: WaterUnit; cupMl: number; habits: Habit[]; weeklyReport: WeeklyReportSettings;
   theme: 'system' | 'light' | 'dark'; groups: OptionGroup[]; templates: MealTemplate[]; slots: DaySlot[];
   bankPresets: BankPreset[]; snackCatalog: SnackCategory[]; deviationCategories: DeviationCategory[]; rules: string[]; updatedAt: string;
 };
@@ -29,6 +40,7 @@ export type BankEntry = {
 };
 export type DayLog = {
   date: string; workout: boolean; meals: MealEntry[]; bank: BankEntry[]; water: number; weight?: number; notes?: string; updatedAt: string;
+  habits?: Record<string, boolean>;
 };
 export type Logs = Record<string, DayLog>;
 export type StoreData = {

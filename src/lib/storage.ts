@@ -8,7 +8,8 @@ export const recoveryNotice = 'נשמר עותק שחזור של נתונים ש
 type LocalStorage = Pick<Storage, 'getItem' | 'setItem'>;
 export const emptyData = (): StoreData => ({ settings: freshSettings(), logs: {}, meta: { dirtyDays: [], settingsDirty: true, cursorVersion: 2 } });
 export function migrate(value: unknown): StoreData {
-  // v1 is the initial schema. Future versions get explicit transformations here.
+  // Additive v1 fields are defaulted by parseBackup/withSettingsDefaults.
+  // Water remains a cup count, so legacy logs and dirty timestamps stay intact.
   const backup = parseBackup(value);
   const source = value as { meta?: Partial<StoreData['meta']> };
   const meta = source.meta;
