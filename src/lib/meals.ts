@@ -12,7 +12,8 @@ export function viewDay(day: DayLog | undefined, date: string, settings: Setting
 }
 export function componentOptions(component: MealComponent, settings: Settings) {
   if (component.kind !== 'choice') return [];
-  return settings.groups.filter(g => component.groupIds.includes(g.id)).flatMap(g => g.options);
+  const options = settings.groups.filter(g => component.groupIds.includes(g.id)).flatMap(g => g.options);
+  return component.optionIds?.length ? options.filter(o => component.optionIds!.includes(o.id)) : options;
 }
 export function isMealComplete(meal: MealEntry, settings: Settings): boolean {
   const template = settings.templates.find(t => t.id === meal.templateId);

@@ -3,7 +3,7 @@ export type FoodOption = {
 };
 export type OptionGroup = { id: string; name: string; options: FoodOption[] };
 export type MealComponent =
-  | { id: string; kind: 'choice'; label: string; groupIds: string[]; pick: number; required: boolean; amountOverrides?: Record<string, string>; amountNote?: string }
+  | { id: string; kind: 'choice'; label: string; groupIds: string[]; pick: number; required: boolean; optionIds?: string[]; amountOverrides?: Record<string, string>; amountNote?: string }
   | { id: string; kind: 'check'; label: string; note?: string };
 export type MealTemplate = {
   id: string; name: string; emoji?: string; components: MealComponent[]; requiresWorkout?: boolean;

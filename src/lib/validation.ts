@@ -19,7 +19,7 @@ function component(c: Obj): boolean {
   if (!str(c.label)) return false;
   if (c.kind === 'check') return optional(c.note, str);
   return c.kind === 'choice' && strings(c.groupIds) && integer(c.pick) && c.pick >= 1 && bool(c.required)
-    && optional(c.amountNote, str) && optional(c.amountOverrides, v => record(v, str));
+    && optional(c.optionIds, strings) && optional(c.amountNote, str) && optional(c.amountOverrides, v => record(v, str));
 }
 export function isSettings(v: unknown): v is Settings {
   if (!obj(v)) return false;
