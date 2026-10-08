@@ -12,11 +12,13 @@ export type MealTemplate = {
 };
 export type DaySlot = { id: string; name: string; defaultTemplateId: string };
 export type BankPreset = { id: string; kind: 'snack' | 'alcohol' | 'other'; name: string; kcal: number; charge: number };
+export type SnackItem = { id: string; name: string; portion?: string; kcal: number; note?: string };
+export type SnackCategory = { id: string; name: string; emoji?: string; items: SnackItem[] };
 export type DeviationCategory = { id: string; name: string; emoji?: string };
 export type Settings = {
   version: number; weekStartsOn: 0 | 1; dailyBankKcal: number; waterGoal: number; weightGoal?: number;
   theme: 'system' | 'light' | 'dark'; groups: OptionGroup[]; templates: MealTemplate[]; slots: DaySlot[];
-  bankPresets: BankPreset[]; deviationCategories: DeviationCategory[]; rules: string[]; updatedAt: string;
+  bankPresets: BankPreset[]; snackCatalog: SnackCategory[]; deviationCategories: DeviationCategory[]; rules: string[]; updatedAt: string;
 };
 export type MealEntry = {
   slotId: string; templateId: string; selections: Record<string, string[]>; done: boolean; extras?: number; freeText?: string;

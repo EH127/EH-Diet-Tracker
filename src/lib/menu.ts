@@ -1,6 +1,6 @@
 import type { Settings } from '../types';
 import { nextTimestamp } from './dates';
-import { isSettings } from './validation';
+import { isSettings, withSettingsDefaults } from './validation';
 
 export type MenuExport = { kind: 'ehdt-menu'; version: 1; exportedAt: string; settings: Settings };
 export const buildMenuExport = (settings: Settings, now: Date = new Date()): MenuExport =>
@@ -11,11 +11,12 @@ export function parseMenuFile(value: unknown): Settings {
   const known = !!file && typeof file === 'object' && !Array.isArray(file)
     && (file.kind === 'ehdt-menu' ? file.version === 1 : file.kind === undefined && (file.version === undefined || file.version === 1));
   if (!known || !isSettings(file.settings)) throw new Error('הקובץ אינו תפריט או גיבוי תקין. הנתונים הקיימים לא השתנו.');
+  // Keep absent catalog fields absent until mergeMenu can preserve the current catalogs.
   return file.settings;
 }
 // Replaces the menu but keeps the importing account's personal weight goal and theme.
 export function mergeMenu(current: Settings, imported: Settings): Settings {
   const menu = structuredClone(imported);
-  return { ...current, groups: menu.groups, templates: menu.templates, slots: menu.slots, bankPresets: menu.bankPresets, deviationCategories: menu.deviationCategories ?? current.deviationCategories, rules: menu.rules,
-    dailyBankKcal: menu.dailyBankKcal, weekStartsOn: menu.weekStartsOn, waterGoal: menu.waterGoal, updatedAt: nextTimestamp(current.updatedAt) };
+  return withSettingsDefaults({ ...current, groups: menu.groups, templates: menu.templates, slots: menu.slots, bankPresets: menu.bankPresets, snackCatalog: menu.snackCatalog ?? current.snackCatalog, deviationCategories: menu.deviationCategories ?? current.deviationCategories, rules: menu.rules,
+    dailyBankKcal: menu.dailyBankKcal, weekStartsOn: menu.weekStartsOn, waterGoal: menu.waterGoal, updatedAt: nextTimestamp(current.updatedAt) });
 }

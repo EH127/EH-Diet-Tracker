@@ -265,6 +265,19 @@ input.switch:checked::after { transform: translateX(-16px); }
 .sheet > .row { margin-bottom: 15px; }
 .sheet h2 { font-size: 19px; }
 .sheet-handle { width: 34px; height: 4px; border-radius: 4px; margin: 0 auto 10px; background: var(--track); }
+.sheet[open]:has(> .bank-sheet-form) { display: flex; flex-direction: column; overflow: hidden; }
+.sheet:has(> .bank-sheet-form) > .row, .sheet:has(> .bank-sheet-form) > .sheet-handle { flex-shrink: 0; }
+.bank-sheet-form { min-height: 0; overflow: hidden; }
+.bank-sheet-fields { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 3px; }
+.bank-sheet-footer { flex-shrink: 0; gap: 8px; padding-top: 12px; border-top: 1px solid var(--border); }
+.bank-sheet-footer .notice, .bank-sheet-footer .soft-hint { margin: 0; }
+.snack-picker { gap: 10px; }
+.snack-picker > .chips .food-chip { min-height: 44px; padding-inline: 8px; font-size: 12px; }
+.snack-results { max-height: 30dvh; overflow-y: auto; overscroll-behavior: contain; padding: 3px; }
+.snack-category { gap: 7px; }
+.snack-category + .snack-category { margin-top: 14px; }
+.snack-item { width: 100%; }
+.snack-over-budget { border-color: var(--amber); }
 .empty { padding: 24px 12px; text-align: center; color: var(--muted); font-size: 13px; line-height: 1.8; }
 .bottom-nav { position: fixed; z-index: 10; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 512px; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); border: 1px solid var(--border); border-bottom: 0; border-radius: 20px 20px 0 0; background: var(--surface); padding: 8px 8px calc(10px + env(safe-area-inset-bottom)); box-shadow: 0 -4px 25px #24392d06; }
 .bottom-nav a { min-height: 55px; display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 11px; color: var(--muted); padding-block: 3px; }

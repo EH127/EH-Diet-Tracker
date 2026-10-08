@@ -16,8 +16,8 @@ export function NumberField({ label, value, onChange, min = 0, step = 1, optiona
 export function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (checked: boolean) => void }) {
   return <label className="toggle"><input type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)} /><span>{label}</span></label>;
 }
-export function Stepper({ value, onChange, label, max = 100 }: { value: number; onChange: (n: number) => void; label: string; max?: number }) {
-  return <div className="stepper"><button type="button" className="icon-button" aria-label={`הפחתת ${label}`} disabled={value <= 0} onClick={() => onChange(value - 1)}><Minus size={18} /></button><output aria-label={label}>{value}</output><button type="button" className="icon-button" aria-label={`הוספת ${label}`} disabled={value >= max} onClick={() => onChange(value + 1)}><Plus size={18} /></button></div>;
+export function Stepper({ value, onChange, label, min = 0, max = 100 }: { value: number; onChange: (n: number) => void; label: string; min?: number; max?: number }) {
+  return <div className="stepper"><button type="button" className="icon-button" aria-label={`הפחתת ${label}`} disabled={value <= min} onClick={() => onChange(value - 1)}><Minus size={18} /></button><output aria-label={label}>{value}</output><button type="button" className="icon-button" aria-label={`הוספת ${label}`} disabled={value >= max} onClick={() => onChange(value + 1)}><Plus size={18} /></button></div>;
 }
 export function Progress({ value, max, label, danger = false }: { value: number; max: number; label: string; danger?: boolean }) {
   return <div className={`progress ${danger ? 'danger' : ''}`} role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={Math.max(1, max)} aria-valuenow={Math.max(0, Math.min(value, Math.max(1, max)))}><span style={{ width: `${Math.min(100, Math.max(0, max ? value / max * 100 : 100))}%` }} /></div>;

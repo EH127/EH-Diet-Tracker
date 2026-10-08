@@ -28,4 +28,27 @@ describe('menu-only export and import', () => {
     expect(mergeMenu(current, { ...imported, deviationCategories: [{ id: 'x', name: 'X' }] }).deviationCategories).toEqual([{ id: 'x', name: 'X' }]);
     expect(merged.slots).toEqual(imported.slots); expect(merged.slots).not.toBe(imported.slots);
   });
+  it('roundtrips a custom snack catalog through menu export/import without sharing mutable items', () => {
+    const current = emptyData().settings;
+    const imported = emptyData().settings; imported.snackCatalog = [{ id: 'custom', name: 'מותאם', emoji: '🍪', items: [{ id: 'cookie', name: 'עוגייה', portion: 'יחידה', kcal: 80, note: 'הערה' }] }];
+    const parsed = parseMenuFile(JSON.parse(JSON.stringify(buildMenuExport(imported))));
+    const merged = mergeMenu(current, parsed);
+    expect(merged.snackCatalog).toEqual(imported.snackCatalog); expect(merged.snackCatalog[0].items[0]).not.toBe(parsed.snackCatalog[0].items[0]);
+    expect(current.snackCatalog).toEqual(emptyData().settings.snackCatalog);
+    expect(mergeMenu(current, { ...parsed, snackCatalog: [] }).snackCatalog).toEqual([]);
+  });
+  it('keeps the current catalog when an imported menu or backup lacks it, and defaults a legacy current menu', () => {
+    const current = emptyData().settings; current.snackCatalog = [{ id: 'custom', name: 'מותאם', items: [] }];
+    const old: Record<string, unknown> = { ...emptyData().settings }; delete old.snackCatalog;
+    for (const file of [{ kind: 'ehdt-menu', version: 1, settings: old }, { version: 1, settings: old, logs: {} }]) {
+      const parsed = parseMenuFile(file);
+      expect(mergeMenu(current, parsed).snackCatalog).toEqual(current.snackCatalog);
+      expect(mergeMenu({ ...current, snackCatalog: [] }, parsed).snackCatalog).toEqual([]);
+      expect(mergeMenu(parsed, parsed).snackCatalog).toEqual(emptyData().settings.snackCatalog);
+    }
+  });
+  it('rejects a malformed imported catalog before merging the menu', () => {
+    const settings = { ...emptyData().settings, snackCatalog: [{ id: 'c', name: 'קטגוריה', items: [{ id: 'i', name: 'פריט', kcal: -1 }] }] };
+    expect(() => parseMenuFile({ kind: 'ehdt-menu', version: 1, settings })).toThrow();
+  });
 });

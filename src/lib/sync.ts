@@ -8,7 +8,7 @@ import { resolveSignIn, syncOnce, type SyncTransport } from './sync-engine';
 import { dateKey } from './dates';
 import { eveningSummary } from './summary';
 import { unsubscribeThisDevice } from './push';
-import { isDayLog, isSettings, withDeviationDefaults } from './validation';
+import { isDayLog, isSettings, withSettingsDefaults } from './validation';
 
 type SyncStatus = 'local' | 'signedOut' | 'offline' | 'syncing' | 'synced' | 'error';
 type SyncState = { status: SyncStatus; email?: string; error?: string };
@@ -53,7 +53,7 @@ export function transport(id: string): SyncTransport {
       let settings: Settings | undefined;
       if (data) {
         if (!isSettings(data.data)) throw new Error('התפריט בענן אינו תקין');
-        settings = withDeviationDefaults(data.data); advance(data.synced_at);
+        settings = withSettingsDefaults(data.data); advance(data.synced_at);
       }
       return { logs, settings, cursor };
     },

@@ -85,6 +85,8 @@ type MealTemplate = {
 type DaySlot = { id: string; name: string; defaultTemplateId: string };
 
 type BankPreset = { id: string; kind: 'snack' | 'alcohol' | 'other'; name: string; kcal: number; charge: number };
+type SnackItem = { id: string; name: string; portion?: string; kcal: number; note?: string };
+type SnackCategory = { id: string; name: string; emoji?: string; items: SnackItem[] };
 // snack presets: charge === kcal ("תפוציפס קידס 45 גרם" ~250).
 // alcohol presets: charge is a flat 250 per drink regardless of kcal (rule: every drink costs 250 from that day or another day).
 
@@ -99,6 +101,7 @@ type Settings = {
   templates: MealTemplate[];
   slots: DaySlot[];
   bankPresets: BankPreset[];
+  snackCatalog: SnackCategory[];    // free-calorie snacks, separate from the existing bank presets
   rules: string[];                  // general guidelines shown on the Menu tab and as tips
   updatedAt: string;                // ISO timestamp, for sync LWW
 };
@@ -157,6 +160,10 @@ Meal templates:
 Day slots (default): `בוקר` → breakfast, `צהריים` → lunch, `ערב` → dairyDinner. (The 250 snack is handled by the bank, not a slot.)
 
 Bank presets: snack `תפוציפס קידס 45 גרם` 250/250; snack `חטיף עד 250 קלוריות` 250/250; alcohol `2 צ'ייסרים` kcal 250 / charge 250; alcohol `שליש בירה` kcal 200 / charge 250; alcohol `כוס יין` kcal 120 / charge 250.
+
+Snack catalog: 46 items from `docs/snacks-original.md`, grouped as גלידות 🍦, חטיפים 🥨, שוקולדים 🍫, ממתקים 🍬. The second repeated גלידות heading means חטיפים. גודי is counted as 100 kcal with a note about the 50–100 range. The snack bank sheet supports name/portion search, category filters, quantities 1–5 and a fits-remaining filter using the chosen charge date. Catalog entries charge their kcal × quantity; existing presets and custom entries stay available.
+
+Older local settings, backups and pulled settings receive cloned defaults for missing catalogs via `withSettingsDefaults`. Menu export includes the catalog; importing a menu that lacks it keeps the current catalog (or applies defaults if both lack it). Intentionally empty catalogs remain empty. Settings supports category/item CRUD, reordering and confirmed default restoration; Menu displays the catalog next to the bank presets.
 
 Rules (`rules[]`, shown on Menu tab; editable list):
 - `מותר להחליף בין הארוחות (למשל צהריים בערב).`
@@ -255,6 +262,7 @@ Sections (collapsible):
 - **ארוחות (תבניות)**: CRUD templates: name, emoji, note, requiresWorkout, preferWorkout, weeklyLimit, bank charges, countsAsCheat; components editor (kind, label, groups multi-select, pick, required, amount overrides per option, amountNote).
 - **מבנה היום**: CRUD slots (name, default template), reorder.
 - **בנק קלוריות**: daily bank kcal, presets CRUD.
+- **קטלוג נשנושים**: category name/emoji and item name/portion/kcal/note CRUD, reorder, confirmed deletion and restore defaults.
 - **יעדים**: water goal, weight goal, week start day (ראשון/שני).
 - **כללים**: edit the rules list.
 - **תצוגה**: theme system/light/dark.

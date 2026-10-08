@@ -15,6 +15,41 @@ describe('storage and import validation', () => {
     expect(migrate({ settings: old, logs: {} }).settings.deviationCategories).toEqual(state.settings.deviationCategories);
     expect(isSettings(old)).toBe(true);
   });
+  it('defaults the snack catalog in migration and backup parsing without changing legacy settings or logs', () => {
+    const state = emptyData(); state.logs['2026-10-04'] = day();
+    const old: Record<string, unknown> = { ...state.settings }; delete old.snackCatalog; delete old.deviationCategories;
+    const legacy = { ...state, settings: old };
+    expect(isSettings(old)).toBe(true);
+    const migrated = migrate(legacy); const backup = parseBackup(legacy);
+    expect(migrated).toEqual(state); expect(backup.settings).toEqual(state.settings); expect(backup.logs).toEqual(state.logs);
+    expect(old).not.toHaveProperty('snackCatalog');
+    migrated.settings.snackCatalog[0].items[0].name = 'שם מותאם';
+    expect(backup.settings.snackCatalog).toEqual(state.settings.snackCatalog);
+    expect(migrate(legacy).settings.snackCatalog).toEqual(state.settings.snackCatalog);
+  });
+  it('preserves custom and intentionally empty catalogs in stored settings and backups', () => {
+    const state = emptyData(); state.settings.snackCatalog = [{ id: 'custom', name: 'מותאם', items: [{ id: 'item', name: 'פריט', kcal: 42 }] }];
+    expect(migrate(state).settings.snackCatalog).toEqual(state.settings.snackCatalog);
+    expect(parseBackup(state).settings.snackCatalog).toEqual(state.settings.snackCatalog);
+    state.settings.snackCatalog = [];
+    expect(migrate(state).settings.snackCatalog).toEqual([]); expect(parseBackup(state).settings.snackCatalog).toEqual([]);
+  });
+  it.each([
+    null, {}, [null], [{ id: '', name: 'קטגוריה', items: [] }], [{ id: '__proto__', name: 'קטגוריה', items: [] }],
+    [{ id: 'c', name: 1, items: [] }], [{ id: 'c', name: 'קטגוריה', emoji: 1, items: [] }], [{ id: 'c', name: 'קטגוריה' }],
+    [{ id: 'c', name: 'קטגוריה', items: {} }], [{ id: 'c', name: 'קטגוריה', items: [{ name: 'פריט', kcal: 100 }] }],
+    ...[-1, NaN, Infinity, '100', undefined].map(kcal => [{ id: 'c', name: 'קטגוריה', items: [{ id: 'i', name: 'פריט', kcal }] }]),
+    [{ id: 'c', name: 'קטגוריה', items: [{ id: 'i', name: 1, kcal: 100 }] }],
+    [{ id: 'c', name: 'קטגוריה', items: [{ id: 'i', name: 'פריט', portion: 4, kcal: 100 }] }],
+    [{ id: 'c', name: 'קטגוריה', items: [{ id: 'i', name: 'פריט', kcal: 100, note: false }] }],
+    [{ id: 'c', name: 'קטגוריה', items: [{ id: 'constructor', name: 'פריט', kcal: 100 }] }],
+    [{ id: 'c', name: 'קטגוריה', items: [] }, { id: 'c', name: 'כפילות', items: [] }],
+    [{ id: 'c', name: 'קטגוריה', items: [{ id: 'i', name: 'פריט', kcal: 100 }, { id: 'i', name: 'כפילות', kcal: 50 }] }],
+    [{ id: 'c', name: 'קטגוריה', items: [{ id: 'i', name: 'פריט', kcal: 100 }] }, { id: 'd', name: 'עוד קטגוריה', items: [{ id: 'i', name: 'כפילות', kcal: 50 }] }],
+  ].map(snackCatalog => ({ snackCatalog })))('rejects a malformed catalog in settings, migration and backup parsing (%#)', ({ snackCatalog }) => {
+    const state = { ...emptyData(), settings: { ...emptyData().settings, snackCatalog } };
+    expect(isSettings(state.settings)).toBe(false); expect(() => migrate(state)).toThrow(); expect(() => parseBackup(state)).toThrow();
+  });
   it('uses the specified localStorage key, and marks imported metadata-free data dirty', () => {
     const state = emptyData(); state.logs['2026-10-04'] = day(); let stored = '';
     const storage = { getItem: (key: string) => key === STORAGE_KEY && stored ? stored : null, setItem: (key: string, value: string) => { expect(key).toBe(STORAGE_KEY); stored = value; } };

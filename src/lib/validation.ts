@@ -1,4 +1,4 @@
-import type { Backup, DayLog, Settings } from '../types';
+import type { Backup, DayLog, Settings, SnackCategory } from '../types';
 import { defaultSettings } from '../data/defaultSettings';
 import { isDateKey } from './dates';
 
@@ -22,9 +22,17 @@ function component(c: Obj): boolean {
   return c.kind === 'choice' && strings(c.groupIds) && integer(c.pick) && c.pick >= 1 && bool(c.required)
     && optional(c.optionIds, strings) && optional(c.amountNote, str) && optional(c.amountOverrides, v => record(v, str));
 }
-// Settings saved before deviations existed lack the field; give them the default categories.
-export const withDeviationDefaults = (s: Settings): Settings =>
-  s.deviationCategories ? s : { ...s, deviationCategories: structuredClone(defaultSettings.deviationCategories) };
+function snackCatalog(v: unknown): boolean {
+  if (!items(v, c => str(c.name) && optional(c.emoji, str)
+    && items(c.items, i => str(i.name) && optional(i.portion, str) && num(i.kcal) && optional(i.note, str)))) return false;
+  const all = (v as SnackCategory[]).flatMap(c => c.items);
+  return new Set(all.map(i => i.id)).size === all.length;
+}
+// Older settings lack newly added catalogs; preserve edits, including intentionally empty lists.
+export const withSettingsDefaults = (s: Settings): Settings =>
+  s.deviationCategories && s.snackCatalog ? s : { ...s,
+    deviationCategories: s.deviationCategories ?? structuredClone(defaultSettings.deviationCategories),
+    snackCatalog: s.snackCatalog ?? structuredClone(defaultSettings.snackCatalog) };
 export function isSettings(v: unknown): v is Settings {
   if (!obj(v)) return false;
   return v.version === 1 && (v.weekStartsOn === 0 || v.weekStartsOn === 1) && num(v.dailyBankKcal)
@@ -37,6 +45,7 @@ export function isSettings(v: unknown): v is Settings {
       && optional(t.weeklyLimit, integer) && optional(t.bankChargeSameDay, num) && optional(t.extraChargeKcal, num))
     && items(v.slots, s => str(s.name) && str(s.defaultTemplateId))
     && optional(v.deviationCategories, c => items(c, x => str(x.name) && optional(x.emoji, str)))
+    && optional(v.snackCatalog, snackCatalog)
     && items(v.bankPresets, p => str(p.name) && ['snack', 'alcohol', 'other'].includes(String(p.kind)) && num(p.kcal) && num(p.charge))
     && new Set((v.groups as { options: { id: string }[] }[]).flatMap(g => g.options.map(o => o.id))).size === (v.groups as { options: unknown[] }[]).flatMap(g => g.options).length;
 }
@@ -55,5 +64,5 @@ export function parseBackup(value: unknown): Backup {
     || !obj(value.logs) || !Object.entries(value.logs).every(([date, log]) => isDateKey(date) && isDayLog(log) && date === log.date)) {
     throw new Error('הקובץ אינו גיבוי תקין או שהגרסה אינה נתמכת. הנתונים הקיימים לא השתנו.');
   }
-  return { version: 1, settings: withDeviationDefaults(value.settings), logs: value.logs as Record<string, DayLog> };
+  return { version: 1, settings: withSettingsDefaults(value.settings), logs: value.logs as Record<string, DayLog> };
 }

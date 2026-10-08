@@ -67,6 +67,26 @@ afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
 const row = (data: DayLog | Settings, synced_at: string, user_id = 'u1'): Row => ({ user_id, day: 'date' in data ? data.date : undefined, data, updated_at: data.updatedAt, synced_at });
 
 describe('server-timestamp sync transport', () => {
+  it('defaults missing catalogs on pulled legacy settings without changing the server data or edit time', async () => {
+    const { transport } = await import('./sync');
+    const expected = settings(); const old: Partial<Settings> = { ...expected }; delete old.snackCatalog; delete old.deviationCategories;
+    cloud.user_settings.push(row(old as Settings, cloud.stamp));
+    const remote = await transport('u1').pull();
+    expect(remote.settings).toEqual(expected); expect(remote.cursor).toBe(cloud.stamp);
+    expect(old).not.toHaveProperty('snackCatalog');
+    remote.settings!.snackCatalog[0].items[0].name = 'שם מותאם';
+    expect((await transport('u1').pull()).settings).toEqual(expected);
+  });
+  it.each([{ snackCatalog: [] }, { snackCatalog: [{ id: 'custom', name: 'מותאם', items: [{ id: 'item', name: 'פריט', kcal: 80 }] }] }])('preserves a pulled catalog, including an empty one (%#)', async ({ snackCatalog }) => {
+    const { transport } = await import('./sync');
+    const menu = { ...settings(), snackCatalog }; cloud.user_settings.push(row(menu, cloud.stamp));
+    expect((await transport('u1').pull()).settings).toEqual(menu);
+  });
+  it('rejects malformed cloud catalogs before they enter the local store', async () => {
+    const { transport } = await import('./sync');
+    const menu = settings(); menu.snackCatalog[0].items[0].kcal = -1; cloud.user_settings.push(row(menu, cloud.stamp));
+    await expect(transport('u1').pull()).rejects.toThrow('התפריט בענן אינו תקין');
+  });
   it('pulls a late offline day/settings upload even though its edit time is behind the cursor', async () => {
     const { transport } = await import('./sync');
     const offline = day('2026-10-07', { notes: 'offline', updatedAt: '2026-10-07T08:00:00Z' });
