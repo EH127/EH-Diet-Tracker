@@ -5,6 +5,9 @@ import { getState, setState, subscribe } from '../store/store';
 import { supabase } from './supabase';
 import { emptyData } from './storage';
 import { resolveSignIn, syncOnce, type SyncTransport } from './sync-engine';
+import { dateKey } from './dates';
+import { eveningSummary } from './summary';
+import { unsubscribeThisDevice } from './push';
 import { isDayLog, isSettings } from './validation';
 
 type SyncStatus = 'local' | 'signedOut' | 'offline' | 'syncing' | 'synced' | 'error';
@@ -63,6 +66,19 @@ function transport(id: string): SyncTransport {
     },
   };
 }
+let lastSummary = '';
+// Best-effort: keep today's evening summary on the server for the push function. Never creates or enables prefs.
+export async function uploadSummary(force = false): Promise<void> {
+  if (!supabase || !userId) return;
+  try {
+    const date = dateKey(); const { logs, settings } = getState();
+    const { title, body } = eveningSummary(date, logs, settings);
+    const stamp = `${userId}|${date}|${title}|${body}`;
+    if (!force && stamp === lastSummary) return;
+    const { error } = await supabase.from('notification_prefs').update({ summary_date: date, summary_title: title, summary_body: body, updated_at: new Date().toISOString() }).eq('user_id', userId);
+    if (!error) lastSummary = stamp;
+  } catch { /* non-fatal */ }
+}
 export async function syncNow(): Promise<void> {
   if (!supabase || !userId) return;
   if (!navigator.onLine) { update({ status: 'offline' }); return; }
@@ -71,7 +87,7 @@ export async function syncNow(): Promise<void> {
   update({ status: 'syncing', error: undefined });
   try {
     await syncOnce(transport(id), getState, setState, () => generation === epoch);
-    if (generation === epoch) update({ status: 'synced' });
+    if (generation === epoch) { update({ status: 'synced' }); void uploadSummary(); }
   } catch {
     if (generation === epoch) update({ status: navigator.onLine ? 'error' : 'offline', error: 'הנתונים נשמרו במכשיר. ננסה לסנכרן שוב בהמשך.' });
   } finally {
@@ -144,6 +160,8 @@ export async function signOutAndReset(): Promise<boolean> {
     await finalSync();
     if (hasUnsynced() && !window.confirm('יש שינויים שעדיין לא סונכרנו לענן. אם תתנתקו עכשיו הם יימחקו מהמכשיר. להתנתק בכל זאת?')) return false;
   }
+  await unsubscribeThisDevice();
+  lastSummary = '';
   await signOut();
   setState(emptyData());
   return true;

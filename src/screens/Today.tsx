@@ -4,6 +4,7 @@ import { editDay } from '../store/store';
 import { addDays, dateKey, dayName, displayDate } from '../lib/dates';
 import { mealUntouched, newMeal, viewDay } from '../lib/meals';
 import { adherence } from '../lib/adherence';
+import { InstallCard } from '../components/InstallCard';
 import { BankCard } from '../components/BankCard';
 import { MealCard } from '../components/MealCard';
 import { WeeklyLimits } from '../components/WeeklyLimits';
@@ -19,6 +20,7 @@ export default function Today({ date, onDate }: { date: string; onDate: (date: s
   const canSuggest = day.workout && evening && mealUntouched(evening) && meat && evening.templateId !== meat.id;
   return <div className="stack screen">
     <header className="date-header"><button className="icon-button" aria-label="יום קודם" onClick={() => onDate(addDays(date, -1))}><ChevronRight /></button><div className="date-title"><p className="eyebrow">{date === dateKey() ? 'יום חדש, צעד קטן' : 'היומן שלך'}</p><h1>{dayName(date)}</h1><label className="date-picker">{displayDate(date)}<input type="date" aria-label="בחירת יום" value={date} onChange={e => { if (e.target.value) onDate(e.target.value); }} /></label></div><button className="icon-button" aria-label="יום הבא" onClick={() => onDate(addDays(date, 1))}><ChevronLeft /></button></header>
+    <InstallCard />
     {date !== dateKey() && <button className="text-button today-link" onClick={() => onDate(dateKey())}>חזרה להיום</button>}
     <section className="day-overview"><div><span className="eyebrow">ההתקדמות שלך</span><h2>{score.complete} מתוך {settings.slots.length} ארוחות הושלמו</h2><p>כל בחירה טובה מצטרפת לדרך.</p></div><ScoreRing score={score.score} /></section>
     <section className={`workout-card ${day.workout ? 'active' : ''}`}><label><Dumbbell size={24} /><strong>היה אימון היום 💪</strong><input className="switch" type="checkbox" role="switch" checked={day.workout} onChange={e => editDay(date, d => { d.workout = e.target.checked; })} /></label>{canSuggest && <button className="suggestion" onClick={() => editDay(date, d => { const m = d.meals.find(m => m.slotId === evening.slotId); if (m) Object.assign(m, newMeal({ id: m.slotId, name: '', defaultTemplateId: meat.id })); })}>להחליף לערב בשרי? ←</button>}</section>
