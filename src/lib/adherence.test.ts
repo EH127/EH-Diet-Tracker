@@ -50,6 +50,11 @@ describe('meal completeness and adherence', () => {
     expect(adherence(log.date, { [log.date]: log }, menu)).toMatchObject({ score: 80, flags: ['ערב בשרי ללא אימון', 'חריגה מבנק הקלוריות'] });
     log.workout = true; expect(adherence(log.date, { [log.date]: log }, menu).score).toBe(90);
   });
+  it('adds one flag per deviation originating on the day', () => {
+    const menu = settings(); const log = day(); completeDay(log, menu);
+    log.bank = [{ id: crypto.randomUUID(), kind: 'deviation' as const, label: 'מתוק', kcal: 100, charge: 100, chargeDate: '2026-10-04', groupId: 'g1', category: 'sweet' }, { id: crypto.randomUUID(), kind: 'deviation' as const, label: 'מתוק', kcal: 50, charge: 50, chargeDate: '2026-10-05', groupId: 'g1', category: 'sweet' }, { id: crypto.randomUUID(), kind: 'deviation' as const, label: 'מתוק', kcal: 100, charge: 100, chargeDate: '2026-10-04', groupId: 'g2', category: 'gone' }];
+    expect(adherence(log.date, { [log.date]: log }, menu)).toMatchObject({ score: 80, flags: ['חריגה: מתוק (150 קל׳)', 'חריגה: (נמחק) (100 קל׳)'] });
+  });
   it('flags the day that exceeds a weekly limit, without retroactive penalties', () => {
     const menu = settings(); const logs: Logs = {};
     for (const date of ['2026-10-04', '2026-10-05', '2026-10-06', '2026-10-09']) {

@@ -1,4 +1,5 @@
 import type { Backup, DayLog, Settings } from '../types';
+import { defaultSettings } from '../data/defaultSettings';
 import { isDateKey } from './dates';
 
 type Obj = Record<string, unknown>;
@@ -21,6 +22,9 @@ function component(c: Obj): boolean {
   return c.kind === 'choice' && strings(c.groupIds) && integer(c.pick) && c.pick >= 1 && bool(c.required)
     && optional(c.optionIds, strings) && optional(c.amountNote, str) && optional(c.amountOverrides, v => record(v, str));
 }
+// Settings saved before deviations existed lack the field; give them the default categories.
+export const withDeviationDefaults = (s: Settings): Settings =>
+  s.deviationCategories ? s : { ...s, deviationCategories: structuredClone(defaultSettings.deviationCategories) };
 export function isSettings(v: unknown): v is Settings {
   if (!obj(v)) return false;
   return v.version === 1 && (v.weekStartsOn === 0 || v.weekStartsOn === 1) && num(v.dailyBankKcal)
@@ -32,6 +36,7 @@ export function isSettings(v: unknown): v is Settings {
       && ['requiresWorkout', 'preferWorkout', 'countsAsCheat'].every(k => optional(t[k], bool))
       && optional(t.weeklyLimit, integer) && optional(t.bankChargeSameDay, num) && optional(t.extraChargeKcal, num))
     && items(v.slots, s => str(s.name) && str(s.defaultTemplateId))
+    && optional(v.deviationCategories, c => items(c, x => str(x.name) && optional(x.emoji, str)))
     && items(v.bankPresets, p => str(p.name) && ['snack', 'alcohol', 'other'].includes(String(p.kind)) && num(p.kcal) && num(p.charge))
     && new Set((v.groups as { options: { id: string }[] }[]).flatMap(g => g.options.map(o => o.id))).size === (v.groups as { options: unknown[] }[]).flatMap(g => g.options).length;
 }
@@ -41,13 +46,14 @@ export function isDayLog(v: unknown): v is DayLog {
     && Array.isArray(v.meals) && v.meals.every(m => obj(m) && id(m.slotId) && str(m.templateId) && bool(m.done)
       && record(m.selections, strings) && optional(m.extras, n => integer(n) && n <= 100) && optional(m.freeText, str))
     && new Set(v.meals.map(m => (m as Obj).slotId)).size === v.meals.length
-    && items(v.bank, e => ['snack', 'alcohol', 'eatout', 'extra', 'other'].includes(String(e.kind)) && str(e.label)
-      && num(e.kcal) && num(e.charge) && isDateKey(e.chargeDate) && optional(e.auto, bool));
+    && items(v.bank, e => ['snack', 'alcohol', 'eatout', 'extra', 'other', 'deviation'].includes(String(e.kind)) && str(e.label)
+      && num(e.kcal) && num(e.charge) && isDateKey(e.chargeDate) && optional(e.auto, bool)
+      && optional(e.category, str) && optional(e.note, str) && optional(e.groupId, str));
 }
 export function parseBackup(value: unknown): Backup {
   if (!obj(value) || (value.version !== undefined && value.version !== 1) || !isSettings(value.settings)
     || !obj(value.logs) || !Object.entries(value.logs).every(([date, log]) => isDateKey(date) && isDayLog(log) && date === log.date)) {
     throw new Error('הקובץ אינו גיבוי תקין או שהגרסה אינה נתמכת. הנתונים הקיימים לא השתנו.');
   }
-  return { version: 1, settings: value.settings, logs: value.logs as Record<string, DayLog> };
+  return { version: 1, settings: withDeviationDefaults(value.settings), logs: value.logs as Record<string, DayLog> };
 }

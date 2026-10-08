@@ -2,6 +2,7 @@ import type { Logs, Settings } from '../types';
 import { adherence } from './adherence';
 import { remaining } from './bank';
 import { weeklyLimits } from './weekly';
+import { deviationGroups } from './deviations';
 
 // Short Hebrew evening summary for one date, used as the push notification text.
 export function eveningSummary(date: string, logs: Logs, settings: Settings): { title: string; body: string } {
@@ -11,6 +12,8 @@ export function eveningSummary(date: string, logs: Logs, settings: Settings): { 
   if (total > 0) parts.push(complete >= total ? 'כל הארוחות סומנו 💪' : `סימנת ${complete} מתוך ${total} ארוחות`);
   const left = remaining(date, logs, settings.dailyBankKcal);
   parts.push(left < 0 ? `חריגה של ${Math.abs(left)} קל׳ בבנק` : `בבנק נשארו ${left} קל׳`);
+  const deviations = deviationGroups(logs[date]);
+  if (deviations.length) parts.push(`${deviations.length === 1 ? 'חריגה אחת' : `${deviations.length} חריגות`} · ${deviations.reduce((n, d) => n + d.kcal, 0)} קל׳`);
   const water = logs[date]?.water ?? 0;
   parts.push(`מים ${water}/${settings.waterGoal}`);
   // Limits are counted through this date only, like the adherence score.

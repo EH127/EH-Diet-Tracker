@@ -16,6 +16,6 @@ export function parseMenuFile(value: unknown): Settings {
 // Replaces the menu but keeps the importing account's personal weight goal and theme.
 export function mergeMenu(current: Settings, imported: Settings): Settings {
   const menu = structuredClone(imported);
-  return { ...current, groups: menu.groups, templates: menu.templates, slots: menu.slots, bankPresets: menu.bankPresets, rules: menu.rules,
+  return { ...current, groups: menu.groups, templates: menu.templates, slots: menu.slots, bankPresets: menu.bankPresets, deviationCategories: menu.deviationCategories ?? current.deviationCategories, rules: menu.rules,
     dailyBankKcal: menu.dailyBankKcal, weekStartsOn: menu.weekStartsOn, waterGoal: menu.waterGoal, updatedAt: nextTimestamp(current.updatedAt) };
 }

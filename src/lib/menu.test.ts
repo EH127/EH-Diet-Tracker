@@ -25,6 +25,7 @@ describe('menu-only export and import', () => {
     const merged = mergeMenu(current, imported);
     expect(merged).toMatchObject({ weightGoal: 70, theme: 'dark', waterGoal: 12, rules: ['כלל'], dailyBankKcal: 400, weekStartsOn: 1, groups: [], templates: [] });
     expect(Date.parse(merged.updatedAt)).toBeGreaterThan(Date.parse(current.updatedAt));
+    expect(mergeMenu(current, { ...imported, deviationCategories: [{ id: 'x', name: 'X' }] }).deviationCategories).toEqual([{ id: 'x', name: 'X' }]);
     expect(merged.slots).toEqual(imported.slots); expect(merged.slots).not.toBe(imported.slots);
   });
 });

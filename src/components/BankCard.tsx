@@ -3,6 +3,7 @@ import { Cookie, Plus, Trash2, Wallet, Wine } from 'lucide-react';
 import type { BankEntry, BankPreset, Logs, Settings } from '../types';
 import { autoExtraId, autoMealId, chargedEntries, remaining } from '../lib/bank';
 import { addDays, displayDate } from '../lib/dates';
+import { categoryName } from '../lib/deviations';
 import { newMeal } from '../lib/meals';
 import { editDay } from '../store/store';
 import { BankSheet } from './BankSheet';
@@ -15,6 +16,10 @@ export function BankCard({ date, logs, settings }: { date: string; logs: Logs; s
   const balance = remaining(date, logs, settings.dailyBankKcal);
   const upcoming = Array.from({ length: 14 }, (_, i) => addDays(date, i + 1)).map(d => ({ date: d, spent: settings.dailyBankKcal - remaining(d, logs, settings.dailyBankKcal) })).filter(d => d.spent > 0);
   function remove(entry: BankEntry & { origin: string }) {
+    if (entry.kind === 'deviation' && entry.groupId) {
+      if (window.confirm('למחוק את החריגה כולה? כל חלקיה יוסרו מהבנק.')) editDay(entry.origin, day => { day.bank = day.bank.filter(b => b.groupId !== entry.groupId); });
+      return;
+    }
     if (entry.auto && !window.confirm('החיוב קשור לארוחה. מחיקה תסיר את התוספת או תחליף את הארוחה. להמשיך?')) return;
     editDay(entry.origin, day => {
       if (entry.auto) {
@@ -34,7 +39,7 @@ export function BankCard({ date, logs, settings }: { date: string; logs: Logs; s
       } else day.bank = day.bank.filter(b => b.id !== entry.id);
     });
   }
-  const renderEntry = (entry: BankEntry & { origin: string }, future = false) => <li key={`${entry.origin}-${entry.id}`} className="bank-entry"><div className="grow"><strong>{entry.label}</strong><small>{entry.kcal ? `${entry.kcal} קל׳ במנה · ` : ''}{entry.auto ? 'חיוב מהארוחה · ' : ''}{future ? `לחיוב ב־${displayDate(entry.chargeDate)}` : entry.origin !== date ? `מיום ${displayDate(entry.origin)}` : 'מהיום'}</small></div><strong className="numeric">−{entry.charge}</strong><button className="icon-button" onClick={() => remove(entry)} aria-label={`מחיקת ${entry.label}`}><Trash2 size={17} /></button></li>;
+  const renderEntry = (raw: BankEntry & { origin: string }, future = false) => { const entry = raw.kind === 'deviation' ? { ...raw, label: `⚠️ ${categoryName(raw.category, settings)}` } : raw; return <li key={`${entry.origin}-${entry.id}`} className="bank-entry"><div className="grow"><strong>{entry.label}</strong><small>{entry.kcal ? `${entry.kcal} קל׳ במנה · ` : ''}{entry.auto ? 'חיוב מהארוחה · ' : ''}{future ? `לחיוב ב־${displayDate(entry.chargeDate)}` : entry.origin !== date ? `מיום ${displayDate(entry.origin)}` : 'מהיום'}</small></div><strong className="numeric">−{entry.charge}</strong><button className="icon-button" onClick={() => remove(entry)} aria-label={`מחיקת ${entry.label}`}><Trash2 size={17} /></button></li>; };
   return <section className="card bank-card"><div className="row between"><h2><Wallet size={20} /> בנק {settings.dailyBankKcal}</h2><span className="eyebrow">הפינוק שלך, בקצב שלך</span></div>
     <div className="bank-balance"><strong className={balance < 0 ? 'text-danger' : ''}>{balance}</strong><span>קלוריות {balance < 0 ? 'בחריגה' : 'נשארו להיום'}</span></div>
     <Progress label="יתרה בבנק" value={balance < 0 ? settings.dailyBankKcal : balance} max={settings.dailyBankKcal} danger={balance < 0} />

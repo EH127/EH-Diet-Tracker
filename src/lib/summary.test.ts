@@ -25,6 +25,13 @@ describe('evening summary', () => {
     expect(body).toContain('כל הארוחות סומנו 💪');
     expect(body).toContain('חריגה של 120 קל׳');
   });
+  it('adds a short deviations part, singular and plural', () => {
+    const menu = settings();
+    const log = day('2026-10-08'); log.bank.push({ id: crypto.randomUUID(), kind: 'deviation' as const, label: 'מתוק', kcal: 120, charge: 120, chargeDate: '2026-10-08', groupId: 'g1', category: 'sweet' });
+    expect(eveningSummary(log.date, { [log.date]: log }, menu).body).toContain('חריגה אחת · 120 קל׳');
+    log.bank.push({ id: crypto.randomUUID(), kind: 'deviation' as const, label: 'מתוק', kcal: 100, charge: 100, chargeDate: '2026-10-08', groupId: 'g2', category: 'sweet' }, { id: crypto.randomUUID(), kind: 'deviation' as const, label: 'מתוק', kcal: 130, charge: 130, chargeDate: '2026-10-09', groupId: 'g2', category: 'sweet' });
+    expect(eveningSummary(log.date, { [log.date]: log }, menu).body).toContain('2 חריגות · 350 קל׳');
+  });
   it('names at most two limits that are at or over the cap', () => {
     const menu = settings();
     const log = day('2026-10-08'); log.meals.forEach(m => { m.templateId = 'eatOut'; });

@@ -3,6 +3,7 @@ import { remaining } from './bank';
 import { viewDay } from './meals';
 import { startOfWeek } from './dates';
 import { weeklyLimits } from './weekly';
+import { categoryName, deviationGroups } from './deviations';
 
 export function adherence(date: string, logs: Logs, settings: Settings): { score: number; flags: string[]; complete: number } {
   const day = viewDay(logs[date], date, settings);
@@ -12,6 +13,7 @@ export function adherence(date: string, logs: Logs, settings: Settings): { score
   const flags: string[] = [];
   if (day.meals.some(m => settings.templates.find(t => t.id === m.templateId)?.requiresWorkout) && !day.workout) flags.push('ערב בשרי ללא אימון');
   if (remaining(date, logs, settings.dailyBankKcal) < 0) flags.push('חריגה מבנק הקלוריות');
+  for (const d of deviationGroups(logs[date])) flags.push(`חריגה: ${categoryName(d.category, settings)} (${d.kcal} קל׳)`);
   // Count through this day only: a Friday excess must not retroactively penalize Sunday.
   const throughDate = Object.fromEntries(Object.entries(logs).filter(([d]) => d >= startOfWeek(date, settings.weekStartsOn) && d <= date));
   const exceeded = weeklyLimits(date, throughDate, settings).filter(l => l.status === 'over' && day.meals.some(m =>

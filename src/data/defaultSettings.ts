@@ -58,6 +58,11 @@ export const defaultSettings: Settings = {
     { id: 'beer', kind: 'alcohol', name: 'שליש בירה', kcal: 200, charge: 250 },
     { id: 'wine', kind: 'alcohol', name: 'כוס יין', kcal: 120, charge: 250 },
   ],
+  deviationCategories: [
+    { id: 'bigPortion', name: 'מנה גדולה מהמותר', emoji: '🍽️' }, { id: 'offMenu', name: 'מאכל מחוץ לתפריט', emoji: '🍔' },
+    { id: 'fried', name: "מטוגן / צ'יפס", emoji: '🍟' }, { id: 'sweet', name: 'מתוק', emoji: '🍫' },
+    { id: 'sugaryDrink', name: 'משקה ממותק', emoji: '🥤' }, { id: 'otherDeviation', name: 'אחר', emoji: '✏️' },
+  ],
   rules: [
     'מותר להחליף בין הארוחות (למשל צהריים בערב).',
     'ערב בשרי — רק ביום שהיה אימון בחדר כושר.',

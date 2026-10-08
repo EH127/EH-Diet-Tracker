@@ -12,17 +12,18 @@ export type MealTemplate = {
 };
 export type DaySlot = { id: string; name: string; defaultTemplateId: string };
 export type BankPreset = { id: string; kind: 'snack' | 'alcohol' | 'other'; name: string; kcal: number; charge: number };
+export type DeviationCategory = { id: string; name: string; emoji?: string };
 export type Settings = {
   version: number; weekStartsOn: 0 | 1; dailyBankKcal: number; waterGoal: number; weightGoal?: number;
   theme: 'system' | 'light' | 'dark'; groups: OptionGroup[]; templates: MealTemplate[]; slots: DaySlot[];
-  bankPresets: BankPreset[]; rules: string[]; updatedAt: string;
+  bankPresets: BankPreset[]; deviationCategories: DeviationCategory[]; rules: string[]; updatedAt: string;
 };
 export type MealEntry = {
   slotId: string; templateId: string; selections: Record<string, string[]>; done: boolean; extras?: number; freeText?: string;
 };
 export type BankEntry = {
-  id: string; kind: 'snack' | 'alcohol' | 'eatout' | 'extra' | 'other'; label: string; kcal: number;
-  charge: number; chargeDate: string; auto?: boolean;
+  id: string; kind: 'snack' | 'alcohol' | 'eatout' | 'extra' | 'other' | 'deviation'; label: string; kcal: number;
+  charge: number; chargeDate: string; auto?: boolean; category?: string; note?: string; groupId?: string;
 };
 export type DayLog = {
   date: string; workout: boolean; meals: MealEntry[]; bank: BankEntry[]; water: number; weight?: number; notes?: string; updatedAt: string;

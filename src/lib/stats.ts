@@ -2,6 +2,7 @@ import type { Logs, Settings } from '../types';
 import { addDays, dateRange, startOfWeek } from './dates';
 import { adherence } from './adherence';
 import { spent } from './bank';
+import { categoryName, deviationGroups, deviationsInRange } from './deviations';
 
 export function statsRows(from: string, to: string, logs: Logs, settings: Settings) {
   return dateRange(from, to).map(date => {
@@ -38,4 +39,11 @@ export function currentStreak(today: string, logs: Logs, settings: Settings): nu
   let streak = 0;
   while (logs[date] && adherence(date, logs, settings).score === 100) { streak++; date = addDays(date, -1); }
   return streak;
+}
+export function deviationStats(from: string, to: string, logs: Logs, settings: Settings) {
+  const byDay = dateRange(from, to).map(date => { const groups = deviationGroups(logs[date]); return { date, count: groups.length, kcal: groups.reduce((n, g) => n + g.kcal, 0) }; });
+  const counts = new Map<string, number>();
+  for (const g of deviationsInRange(from, to, logs)) { const name = categoryName(g.category, settings); counts.set(name, (counts.get(name) ?? 0) + 1); }
+  const categories = [...counts].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
+  return { byDay, categories, count: byDay.reduce((n, d) => n + d.count, 0), kcal: byDay.reduce((n, d) => n + d.kcal, 0) };
 }

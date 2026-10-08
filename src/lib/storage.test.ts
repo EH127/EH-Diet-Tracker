@@ -10,6 +10,11 @@ describe('storage and import validation', () => {
     expect(isSettings(state.settings)).toBe(true); expect(isDayLog(log)).toBe(true);
     expect(parseBackup({ version: 1, settings: state.settings, logs: state.logs }).logs).toEqual(state.logs);
   });
+  it('defaults deviation categories for settings stored before they existed', () => {
+    const state = emptyData(); const old: Record<string, unknown> = { ...state.settings }; delete old.deviationCategories;
+    expect(migrate({ settings: old, logs: {} }).settings.deviationCategories).toEqual(state.settings.deviationCategories);
+    expect(isSettings(old)).toBe(true);
+  });
   it('uses the specified localStorage key, and marks imported metadata-free data dirty', () => {
     const state = emptyData(); state.logs['2026-10-04'] = day(); let stored = '';
     saveData(state, { setItem: (key, value) => { expect(key).toBe(STORAGE_KEY); stored = value; } });
