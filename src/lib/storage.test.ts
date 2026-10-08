@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { emptyData, loadData, migrate, saveData, STORAGE_KEY } from './storage';
+import { emptyData, loadData, migrate, saveData, RECOVERY_KEY, STORAGE_KEY } from './storage';
 import { isDayLog, isSettings, parseBackup } from './validation';
 import { day } from './test-helpers';
 
@@ -17,15 +17,50 @@ describe('storage and import validation', () => {
   });
   it('uses the specified localStorage key, and marks imported metadata-free data dirty', () => {
     const state = emptyData(); state.logs['2026-10-04'] = day(); let stored = '';
-    saveData(state, { setItem: (key, value) => { expect(key).toBe(STORAGE_KEY); stored = value; } });
-    expect(loadData({ getItem: () => stored }).data).toEqual(state);
+    const storage = { getItem: (key: string) => key === STORAGE_KEY && stored ? stored : null, setItem: (key: string, value: string) => { expect(key).toBe(STORAGE_KEY); stored = value; } };
+    saveData(state, storage);
+    expect(loadData(storage).data).toEqual(state);
     expect(migrate({ settings: state.settings, logs: state.logs }).meta).toMatchObject({ dirtyDays: ['2026-10-04'], settingsDirty: true });
   });
+  it.each([undefined, 1])('resets an old client-clock cursor once and persists the server cursor version (%#)', cursorVersion => {
+    const legacy = emptyData(); legacy.meta.cursorVersion = cursorVersion; legacy.meta.lastPulledAt = '2099-01-01T00:00:00Z';
+    legacy.logs['2026-10-04'] = day(); legacy.meta.dirtyDays = ['2026-10-04'];
+    let raw = JSON.stringify(legacy);
+    const storage = { getItem: (key: string) => key === STORAGE_KEY ? raw : null, setItem: (_key: string, value: string) => { raw = value; } };
+    const upgraded = loadData(storage).data;
+    expect(upgraded.meta).toMatchObject({ cursorVersion: 2, lastPulledAt: undefined, dirtyDays: ['2026-10-04'] });
+    expect(upgraded.logs).toEqual(legacy.logs);
+    saveData(upgraded, storage); expect(JSON.parse(raw).meta.cursorVersion).toBe(2);
+    upgraded.meta.lastPulledAt = '2026-10-08T12:00:00Z'; saveData(upgraded, storage);
+    expect(loadData(storage).data.meta).toMatchObject({ cursorVersion: 2, lastPulledAt: '2026-10-08T12:00:00Z' });
+  });
   it('handles unavailable, corrupt and quota-limited storage without crashing', () => {
-    expect(loadData({ getItem: () => { throw new Error('denied'); } }).error).toBeTruthy();
-    expect(loadData({ getItem: () => '{bad' }).error).toBeTruthy();
-    expect(loadData({ getItem: () => null }).data.settings.slots).toHaveLength(3);
-    expect(saveData(emptyData(), { setItem: () => { throw new Error('quota'); } })).toBeTruthy();
+    const setItem = () => {};
+    expect(loadData({ getItem: () => { throw new Error('denied'); }, setItem }).error).toBeTruthy();
+    expect(loadData({ getItem: () => '{bad', setItem }).error).toBeTruthy();
+    expect(loadData({ getItem: () => null, setItem }).data.settings.slots).toHaveLength(3);
+    expect(saveData(emptyData(), { getItem: () => null, setItem: () => { throw new Error('quota'); } })).toBeTruthy();
+  });
+  it.each(['{bad', JSON.stringify({ settings: { version: 99 }, logs: {} }), ''])('copies unreadable storage before an automatic write (%#)', raw => {
+    const memory = new Map([[STORAGE_KEY, raw]]);
+    const storage = { getItem: (key: string) => memory.get(key) ?? null, setItem: (key: string, value: string) => { memory.set(key, value); } };
+    const loaded = loadData(storage);
+    expect(loaded.error).toBeTruthy(); expect(memory.get(RECOVERY_KEY)).toBe(raw);
+    expect(saveData(loaded.data, storage)).toBeUndefined();
+    expect(memory.get(RECOVERY_KEY)).toBe(raw); expect(loadData(storage).error).toBeUndefined();
+  });
+  it('never overwrites an existing recovery copy, including on writes without a prior load', () => {
+    const memory = new Map([[STORAGE_KEY, '{new corruption'], [RECOVERY_KEY, '{original']]);
+    const storage = { getItem: (key: string) => memory.get(key) ?? null, setItem: (key: string, value: string) => { memory.set(key, value); } };
+    expect(saveData(emptyData(), storage)).toBeUndefined();
+    expect(memory.get(RECOVERY_KEY)).toBe('{original');
+  });
+  it('refuses to replace unreadable storage when the recovery copy cannot be saved', () => {
+    const writes: string[] = [];
+    const storage = { getItem: (key: string) => key === STORAGE_KEY ? '{original' : null,
+      setItem: (key: string) => { writes.push(key); throw new Error('quota'); } };
+    expect(loadData(storage).error).toBeTruthy(); expect(saveData(emptyData(), storage)).toBeTruthy();
+    expect(writes).toEqual([RECOVERY_KEY, RECOVERY_KEY]);
   });
   it.each([
     (v: ReturnType<typeof emptyData>) => { v.settings.version = 2; },

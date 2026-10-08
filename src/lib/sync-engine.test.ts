@@ -44,6 +44,21 @@ describe('offline-first sync transactions', () => {
     await syncOnce(transport, get, set, () => false);
     expect(get()).toBe(before); expect(transport.pushDays).not.toHaveBeenCalled();
   });
+  it('does not upload after persisting a pull discovers another tab account reset', async () => {
+    const { get, transport } = fixture(); let active = true;
+    await syncOnce(transport, get, () => { active = false; }, () => active);
+    expect(transport.pushDays).not.toHaveBeenCalled(); expect(transport.pushSettings).not.toHaveBeenCalled();
+  });
+  it('uploads edits incorporated from storage while persisting the pulled merge', async () => {
+    const { get, set, transport } = fixture(); let first = true;
+    const coordinatedSet = (next: StoreData) => {
+      if (first) { first = false; next.logs['2026-10-05'] = day('2026-10-05'); next.meta.dirtyDays.push('2026-10-05'); }
+      set(next);
+    };
+    await syncOnce(transport, get, coordinatedSet, () => true);
+    expect(transport.pushDays).toHaveBeenCalledWith([day(), day('2026-10-05')]);
+    expect(get().meta.dirtyDays).toEqual([]);
+  });
 });
 describe('sign-in account safety', () => {
   const withLogs = (syncUserId?: string) => { const s = emptyData(); s.logs['2026-10-04'] = day(); s.meta = { dirtyDays: [], settingsDirty: false, syncUserId, lastPulledAt: '2026-10-01T00:00:00Z' }; return s; };
@@ -62,6 +77,6 @@ describe('sign-in account safety', () => {
     const current = withLogs('u1'); current.meta.dirtyDays = ['2026-10-04']; current.meta.settingsDirty = true;
     const next = resolveSignIn(current, 'u2');
     expect(next.logs).toEqual({}); expect(next.settings).toEqual(emptyData().settings);
-    expect(next.meta).toEqual({ dirtyDays: [], settingsDirty: false, syncUserId: 'u2' });
+    expect(next.meta).toEqual({ dirtyDays: [], settingsDirty: false, cursorVersion: 2, syncUserId: 'u2' });
   });
 });

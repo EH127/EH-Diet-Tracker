@@ -31,6 +31,6 @@ export type DayLog = {
 export type Logs = Record<string, DayLog>;
 export type StoreData = {
   settings: Settings; logs: Logs;
-  meta: { lastPulledAt?: string; dirtyDays: string[]; settingsDirty: boolean; syncUserId?: string; lastSyncedAt?: string };
+  meta: { lastPulledAt?: string; cursorVersion?: number; dirtyDays: string[]; settingsDirty: boolean; syncUserId?: string; lastSyncedAt?: string; localResetId?: string };
 };
 export type Backup = { version: number; settings: Settings; logs: Logs };

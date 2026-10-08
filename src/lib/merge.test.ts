@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mergeLogs, mergeRemote, newer } from './merge';
+import { mergeLogs, mergeRemote, mergeStored, newer } from './merge';
 import { emptyData } from './storage';
 import { day } from './test-helpers';
 describe('last-write-wins merge', () => {
@@ -26,5 +26,16 @@ describe('last-write-wins merge', () => {
     const state = emptyData(); state.logs = { '2026-10-04': day() }; state.meta.dirtyDays = ['2026-10-04'];
     const remote = day(undefined, { updatedAt: '2026-10-03T00:00:00Z' });
     expect(mergeRemote(state, { [remote.date]: remote }).meta.dirtyDays).toEqual(['2026-10-04']);
+  });
+  it.each([undefined, 1])('preserves the upgraded cursor version and its cursor when merging older tabs (%#)', cursorVersion => {
+    const legacy = emptyData(); legacy.meta.cursorVersion = cursorVersion; legacy.meta.lastPulledAt = '2099-01-01T00:00:00Z';
+    const upgraded = emptyData();
+    for (const merged of [mergeStored(legacy, upgraded), mergeStored(upgraded, legacy)]) {
+      expect(merged.meta.cursorVersion).toBe(2); expect(merged.meta.lastPulledAt).toBeUndefined();
+    }
+    upgraded.meta.lastPulledAt = '2026-10-08T12:00:00Z';
+    for (const merged of [mergeStored(legacy, upgraded), mergeStored(upgraded, legacy)]) {
+      expect(merged.meta).toMatchObject({ cursorVersion: 2, lastPulledAt: upgraded.meta.lastPulledAt });
+    }
   });
 });

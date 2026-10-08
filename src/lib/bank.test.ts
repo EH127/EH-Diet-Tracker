@@ -52,4 +52,12 @@ describe('bank allocation', () => {
     const result = reconcileAutoBank(log, { [previous.date]: previous }, menu);
     expect(result.bank.filter(b => b.kind === 'extra').map(b => b.chargeDate)).toEqual(['2026-10-06', '2026-10-06']);
   });
+  it('preserves charges and overrides for a deleted template while reconciling other meals', () => {
+    const log = day(); log.meals[2].templateId = 'eatOut'; log.meals[2].extras = 1;
+    const recorded = reconcileAutoBank(log, {}, settings()); recorded.bank[1].chargeDate = '2026-10-10';
+    const menu = settings(); menu.templates = menu.templates.filter(t => t.id !== 'eatOut');
+    expect(reconcileAutoBank(recorded, {}, menu).bank).toEqual(recorded.bank);
+    recorded.meals[2].templateId = 'dairyDinner';
+    expect(reconcileAutoBank(recorded, {}, menu).bank).toEqual([]);
+  });
 });

@@ -14,6 +14,9 @@ export async function syncOnce(transport: SyncTransport, get: () => StoreData, s
   if (!valid()) return;
   let current = mergeRemote(get(), remote.logs, remote.settings);
   set(current);
+  if (!valid()) return;
+  // The persisted store may have incorporated another tab's edits while setting.
+  current = get();
   const snapshot = current;
   const pending = snapshot.meta.dirtyDays.map(d => snapshot.logs[d]).filter(Boolean);
   if (pending.length) await transport.pushDays(pending);

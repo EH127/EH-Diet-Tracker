@@ -22,6 +22,12 @@ export function reconcileAutoBank(day: DayLog, logs: Logs, settings: Settings): 
   const bank = day.bank.filter(e => !e.auto);
   const current = { ...day, bank };
   const allLogs = { ...logs, [day.date]: current };
+  // A deleted template has no rules to recalculate. Keep that meal's recorded
+  // charges, including extra date overrides, and reserve them before allocation.
+  for (const meal of day.meals) {
+    if (settings.templates.some(t => t.id === meal.templateId)) continue;
+    bank.push(...day.bank.filter(e => e.auto && (e.id === autoMealId(meal.slotId) || e.id.startsWith(`auto:${meal.slotId}:extra:`))));
+  }
   // Reserve all same-day charges before allocating extras, including multiple eat-out slots.
   for (const meal of day.meals) {
     const template = settings.templates.find(t => t.id === meal.templateId);

@@ -24,33 +24,36 @@ let running = false;
 let rerun = false;
 let timer: ReturnType<typeof setTimeout> | undefined;
 
-function transport(id: string): SyncTransport {
+export function transport(id: string): SyncTransport {
   const client = supabase!;
   return {
     async pull(since) {
       const logs: Logs = {};
       let cursor = since;
+      // Server write times can precede commit visibility. Re-read a small window;
+      // record merging is idempotent and the cursor never moves backwards.
+      const overlap = since ? new Date(Date.parse(since) - 60_000).toISOString() : undefined;
       const advance = (stamp: string) => { if (!cursor || Date.parse(stamp) > Date.parse(cursor)) cursor = stamp; };
       // Paginate to avoid silently truncating histories at PostgREST's row cap.
       for (let offset = 0; ; offset += 500) {
-        let query = client.from('day_logs').select('day,data,updated_at').eq('user_id', id).order('day').range(offset, offset + 499);
-        if (since) query = query.gt('updated_at', since);
+        let query = client.from('day_logs').select('day,data,synced_at').eq('user_id', id).order('day').range(offset, offset + 499);
+        if (overlap) query = query.gte('synced_at', overlap);
         const { data, error } = await query;
         if (error) throw error;
         for (const row of data ?? []) {
           if (!isDayLog(row.data) || row.day !== row.data.date) throw new Error('נתוני יום בענן אינם תקינים');
-          logs[row.day] = row.data; advance(row.updated_at);
+          logs[row.day] = row.data; advance(row.synced_at);
         }
         if ((data?.length ?? 0) < 500) break;
       }
-      let query = client.from('user_settings').select('data,updated_at').eq('user_id', id);
-      if (since) query = query.gt('updated_at', since);
+      let query = client.from('user_settings').select('data,synced_at').eq('user_id', id);
+      if (overlap) query = query.gte('synced_at', overlap);
       const { data, error } = await query.maybeSingle();
       if (error) throw error;
       let settings: Settings | undefined;
       if (data) {
         if (!isSettings(data.data)) throw new Error('התפריט בענן אינו תקין');
-        settings = withDeviationDefaults(data.data); advance(data.updated_at);
+        settings = withDeviationDefaults(data.data); advance(data.synced_at);
       }
       return { logs, settings, cursor };
     },
@@ -84,12 +87,14 @@ export async function syncNow(): Promise<void> {
   if (!navigator.onLine) { update({ status: 'offline' }); return; }
   if (running) { rerun = true; return; }
   running = true; const epoch = generation; const id = userId;
+  const resetId = getState().meta.localResetId;
+  const valid = () => generation === epoch && getState().meta.syncUserId === id && getState().meta.localResetId === resetId;
   update({ status: 'syncing', error: undefined });
   try {
-    await syncOnce(transport(id), getState, setState, () => generation === epoch);
-    if (generation === epoch) { update({ status: 'synced' }); void uploadSummary(); }
+    await syncOnce(transport(id), getState, setState, valid);
+    if (valid()) { update({ status: 'synced' }); void uploadSummary(); }
   } catch {
-    if (generation === epoch) update({ status: navigator.onLine ? 'error' : 'offline', error: 'הנתונים נשמרו במכשיר. ננסה לסנכרן שוב בהמשך.' });
+    if (valid()) update({ status: navigator.onLine ? 'error' : 'offline', error: 'הנתונים נשמרו במכשיר. ננסה לסנכרן שוב בהמשך.' });
   } finally {
     running = false;
     if (rerun) { rerun = false; schedule(); }
@@ -103,7 +108,8 @@ function setSession(session: Session | null) {
   update({ email: session?.user.email, status: userId ? 'syncing' : 'signedOut', error: undefined });
   if (userId) {
     // A cursor belongs to one account only; data tied to another account is reset before syncing.
-    setState(resolveSignIn(getState(), userId));
+    const current = getState();
+    setState(resolveSignIn(current, userId), current.meta.syncUserId && current.meta.syncUserId !== userId ? 'replace' : 'merge');
     void syncNow();
   }
 }
@@ -163,6 +169,6 @@ export async function signOutAndReset(): Promise<boolean> {
   await unsubscribeThisDevice();
   lastSummary = '';
   await signOut();
-  setState(emptyData());
+  setState(emptyData(), 'replace');
   return true;
 }

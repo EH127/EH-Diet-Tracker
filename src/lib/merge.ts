@@ -15,3 +15,22 @@ export function mergeRemote(local: StoreData, remoteLogs: Logs, remoteSettings?:
     settingsDirty: local.meta.settingsDirty && settings === local.settings,
   } };
 }
+export function mergeStored(local: StoreData, stored: StoreData, previous?: StoreData): StoreData {
+  const logs = mergeLogs(local.logs, stored.logs);
+  const settings = newer(local.settings, stored.settings);
+  const localCursorVersion = local.meta.cursorVersion ?? 0;
+  const storedCursorVersion = stored.meta.cursorVersion ?? 0;
+  // Union pending edits, except acknowledgements of the exact version uploaded.
+  // A different version written by another tab must remain dirty.
+  const acknowledged = (date: string) => previous?.meta.dirtyDays.includes(date) && !local.meta.dirtyDays.includes(date)
+    && stored.logs[date]?.updatedAt === previous.logs[date]?.updatedAt;
+  const settingsAcknowledged = previous?.meta.settingsDirty && !local.meta.settingsDirty
+    && stored.settings.updatedAt === previous.settings.updatedAt;
+  return { settings, logs, meta: { ...stored.meta, ...local.meta,
+    // Keep the cursor paired with its version when merging an older tab's state.
+    cursorVersion: Math.max(localCursorVersion, storedCursorVersion) || undefined,
+    lastPulledAt: storedCursorVersion > localCursorVersion ? stored.meta.lastPulledAt : local.meta.lastPulledAt,
+    dirtyDays: [...new Set([...local.meta.dirtyDays, ...stored.meta.dirtyDays])].filter(d => !!logs[d] && !acknowledged(d)),
+    settingsDirty: local.meta.settingsDirty || (stored.meta.settingsDirty && !settingsAcknowledged),
+  } };
+}
